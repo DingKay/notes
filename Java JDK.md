@@ -4,7 +4,7 @@
 
   > JDK(Java Development Kit) 是Java语言的软件开发工具包，主要用于移动设备、嵌入式设备上的Java应用程序。JDK是整个Java开发的核心，它包含了Java的运行环境(JVM + Java系统类库) 和Java工具
 
-* 二、Java JDK的版本
+* 二、Java JDK的版本说明
 
   1. JDK(Java Development Kit) 是Java语言的软件开发工具包(SDK)。
 
@@ -14,8 +14,6 @@
 
   4. ME(J2ME) Micro Edition 主要用于移动设备、嵌入式设备上的Java应用程序，从JDK5.0开始，更名为Java ME。
 
-     >
-     >
      >没有JDK的话，无法编译Java程序(指Java源码 ``` .java 文件 ```) 如果只想运行Java程序(指```Class```或者```Jar```等其他归档文件)则只需要安装相应的JRE。
 
      ![JDK各个版本的名称及发布日期](images\JavaJDK\JDK各个版本的名称及发布日期.png)
@@ -28,11 +26,15 @@
 
   * 配置环境变量：`ClassPath` `JAVA_HOME` `Path`
 
-  * `CLASS_PATH` *lib* 目录下的dt.Jar 以及 tools.Jar 和 最重要的 `.`![CLASS_PATH](images\JavaJDK\Java-ClassPath.png)
+  * `CLASS_PATH` *lib* 目录下的dt.Jar 以及 tools.Jar 和 最重要的 `.`<br>![CLASS_PATH](images\JavaJDK\Java-ClassPath.png)<br>
+   ```
+   配置`.`的目的是由于LINUX的安全机制引起的，LINUX用户很明白，WINDOWS用户就很难理解(因为WINDOWS默认的搜索顺序是先搜索当前目录的，再搜索系统目录的，再搜索PATH环境变量设定的) 。
+   为什么CLASSPATH后面指定了tools.jar这个具体文件？不指定行不行？显然不行，行的话我还能这么罗索嘛！:) 这个是由java语言的import机制和jar机制决定的，你可以查资料解决。
+   ```
 
-  * `Path` JDK的*bin*目录![Path](images\JavaJDK\JavaPath.png)
+  * `Path` JDK的*bin*目录<br>![Path](images\JavaJDK\JavaPath.png)
 
-  * `JAVA_HOME` 代表你的JDK安装路径![JAVA_HOME](images\JavaJDK\JavaHome.png)
+  * `JAVA_HOME` 代表你的JDK安装路径<br>![JAVA_HOME](images\JavaJDK\JavaHome.png)
 
     **TIPS:**
 
@@ -44,13 +46,14 @@
 
     ![中文乱码](images\JavaJDK\CMD中文乱码.png)
 
-    命令==chcp==切换活动代码页，此时跟系统的编码有关。尝试一下两种编码即可解决。
+    命令`chcp`切换活动代码页，此时跟系统的编码有关。尝试一下两种编码即可解决。
 
     ![UTF-8编码](images\JavaJDK\chcp切换活动代码页65001-UTF-8.png)
 
     ![GBK编码](images\JavaJDK\chcp切换活动代码页936-GBK.png)
 
-* 五、CMD命令查看是否安装成功
+* 五、CMD命令查看是否安装成功<br>
+  `java -version`
 
   ![CMD查询JDK版本信息](images\JavaJDK\CMD查询JDK版本信息.png)
 

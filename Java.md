@@ -1,4 +1,23 @@
-## Java
+# Java
+
+## 简单介绍一下Java
+
+* Java 是一门简单易学，完全面向对象，安全可靠，与平台无关的编程语言。
+
+> J2EE(Java Platform Enterprise Edition) 企业版：是为开发企业环境下的应用程序提供的一套解决方案。<br>
+> J2ME(Java Platform Micro Edition) 小型版：是为开发电子消费产品和嵌入式设备提供的解决方案，主要体现于小型电子消费产品，如手机中的应用等。<br>
+> J2SE(Java Platform Standard Edition) 标准版：该技术体系是其他两者的基础，可以完成一些桌面应用程序的开发。
+
+![Javase是两者的基础](images/Java/Java版本简介.png)<br>
+
+* Java语言的特点：跨平台<br>
+通过Java的编译器编译成了Class文件以后，在不同主机上面运行Java的执行文件时，由不同版本的JVM来处理Class文件。(所以是简介实现了跨平台，由不同版本的Jvm最终执行成不同系统所能识别的系统命令)<br>
+
+![Java的特点：跨平台](images/Java/Java语言的特点-跨平台.png)<br>
+
+* Java的编译流程<br>
+
+![](images/Java/Java编译.png)
 
 一、 Java数据类型
 
@@ -87,7 +106,7 @@ Tips:
 
 1. Java是一个==纯面向对象==的语言，基于类的，也就是`class` 并且Java是一个编译型语言，运行Java需要先将`.java`文件编译成`.class`文件 Java真正运行的是这个`.class`文件 运行这个文件的是==Java虚拟机== 也叫做==JVM==
 
-  	 2. Java中类名首字母要大写
+  	 1. Java中类名首字母要大写
 
 ---
 
