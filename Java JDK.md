@@ -20,7 +20,7 @@
 
 * 三、[JDK下载](https://www.oracle.com/technetwork/java/javase/downloads/index.html)
 
-* 四、JDK安装与配置环境变量
+* 四、JDK安装与配置环境变量(Windows环境)
 
   * 点击```下一步```完成安装
 
@@ -60,3 +60,22 @@
 ---
 
 以上则安装Java JDK成功。
+
+补充：Linux环境下安装jdk
+
+1. 去官网下载一个Linux版本的jdk
+![](images/JavaJDK/Linux版本jdk.png)
+
+2. 使用`yum install` 安装 `lrzsz`命令包![](images/JavaJDK/安装lrzsz.png)
+
+3. `rz -be` 上传到服务器上
+
+4. `tar -zxvf` 解压压缩包<br>![](images/JavaJDK/解压jdk.png)
+   
+5. 为了一会配置环境变量更方便，将解压包改名并且移动位置<br>![](images/JavaJDK/改名并移动位置.png)
+
+6. 配置环境变量<br>![](images/JavaJDK/Linux系统Java环境变量.png)
+
+7. 使用命令刷新环境变量，使之即刻生效![](images/JavaJDK/配置结束.png)
+
+以上，Linux上的jdk安装成功。
