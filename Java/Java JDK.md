@@ -16,7 +16,7 @@
 
      >没有JDK的话，无法编译Java程序(指Java源码 ``` .java 文件 ```) 如果只想运行Java程序(指```Class```或者```Jar```等其他归档文件)则只需要安装相应的JRE。
 
-     ![JDK各个版本的名称及发布日期](images\JavaJDK\JDK各个版本的名称及发布日期.png)
+     ![JDK各个版本的名称及发布日期](..\images\JavaJDK\JDK各个版本的名称及发布日期.png)
 
 * 三、[JDK下载](https://www.oracle.com/technetwork/java/javase/downloads/index.html)
 
@@ -26,13 +26,13 @@
 
   * 配置环境变量：`ClassPath` `JAVA_HOME` `Path`
 
-  * `CLASS_PATH` *lib* 目录下的dt.Jar 以及 tools.Jar 和 最重要的 `.`<br>![CLASS_PATH](images\JavaJDK\Java-ClassPath.png)<br>
+  * `CLASS_PATH` *lib* 目录下的dt.Jar 以及 tools.Jar 和 最重要的 `.`<br>![CLASS_PATH](..\images\JavaJDK\Java-ClassPath.png)<br>
    ```
    配置`.`的目的是由于LINUX的安全机制引起的，LINUX用户很明白，WINDOWS用户就很难理解(因为WINDOWS默认的搜索顺序是先搜索当前目录的，再搜索系统目录的，再搜索PATH环境变量设定的) 。
    为什么CLASSPATH后面指定了tools.jar这个具体文件？不指定行不行？显然不行，行的话我还能这么罗索嘛！:) 这个是由java语言的import机制和jar机制决定的，你可以查资料解决。
    ```
 
-  * `Path` JDK的*bin*目录<br>![Path](images\JavaJDK\JavaPath.png)
+  * `Path` JDK的*bin*目录<br>![Path](..\images\JavaJDK\JavaPath.png)
 
   * `JAVA_HOME` 代表你的JDK安装路径<br>![JAVA_HOME](images\JavaJDK\JavaHome.png)
 
