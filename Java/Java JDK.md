@@ -34,7 +34,7 @@
 
   * `Path` JDK的*bin*目录<br>![Path](..\images\JavaJDK\JavaPath.png)
 
-  * `JAVA_HOME` 代表你的JDK安装路径<br>![JAVA_HOME](images\JavaJDK\JavaHome.png)
+  * `JAVA_HOME` 代表你的JDK安装路径<br>![JAVA_HOME](..\images\JavaJDK\JavaHome.png)
 
     **TIPS:**
 
@@ -44,18 +44,18 @@
 
     如果使用的是老版本的`Commond` 并且 输出打印中文，出现中文乱码，需要切换活动代码页：
 
-    ![中文乱码](images\JavaJDK\CMD中文乱码.png)
+    ![中文乱码](..\images\JavaJDK\CMD中文乱码.png)
 
     命令`chcp`切换活动代码页，此时跟系统的编码有关。尝试一下两种编码即可解决。
 
-    ![UTF-8编码](images\JavaJDK\chcp切换活动代码页65001-UTF-8.png)
+    ![UTF-8编码](..\images\JavaJDK\chcp切换活动代码页65001-UTF-8.png)
 
-    ![GBK编码](images\JavaJDK\chcp切换活动代码页936-GBK.png)
+    ![GBK编码](..\images\JavaJDK\chcp切换活动代码页936-GBK.png)
 
 * 五、CMD命令查看是否安装成功<br>
   `java -version`
 
-  ![CMD查询JDK版本信息](images\JavaJDK\CMD查询JDK版本信息.png)
+  ![CMD查询JDK版本信息](..\images\JavaJDK\CMD查询JDK版本信息.png)
 
 ---
 
@@ -64,18 +64,18 @@
 补充：Linux环境下安装jdk
 
 1. 去官网下载一个Linux版本的jdk
-![](images/JavaJDK/Linux版本jdk.png)
+![](..\images/JavaJDK/Linux版本jdk.png)
 
-2. 使用`yum install` 安装 `lrzsz`命令包![](images/JavaJDK/安装lrzsz.png)
+2. 使用`yum install` 安装 `lrzsz`命令包![](..\images/JavaJDK/安装lrzsz.png)
 
 3. `rz -be` 上传到服务器上
 
-4. `tar -zxvf` 解压压缩包<br>![](images/JavaJDK/解压jdk.png)
+4. `tar -zxvf` 解压压缩包<br>![](..\images/JavaJDK/解压jdk.png)
    
-5. 为了一会配置环境变量更方便，将解压包改名并且移动位置<br>![](images/JavaJDK/改名并移动位置.png)
+5. 为了一会配置环境变量更方便，将解压包改名并且移动位置<br>![](..\images/JavaJDK/改名并移动位置.png)
 
-6. 配置环境变量<br>![](images/JavaJDK/Linux系统Java环境变量.png)
+6. 配置环境变量<br>![](..\images/JavaJDK/Linux系统Java环境变量.png)
 
-7. 使用命令刷新环境变量，使之即刻生效![](images/JavaJDK/配置结束.png)
+7. 使用命令刷新环境变量，使之即刻生效![](..\images/JavaJDK/配置结束.png)
 
 以上，Linux上的jdk安装成功。

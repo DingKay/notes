@@ -1,6 +1,6 @@
 # Java
 
-## 简单介绍一下Java
+## 简介
 
 * Java 是一门简单易学，完全面向对象，安全可靠，与平台无关的编程语言。
 
@@ -8,18 +8,61 @@
 > J2ME(Java Platform Micro Edition) 小型版：是为开发电子消费产品和嵌入式设备提供的解决方案，主要体现于小型电子消费产品，如手机中的应用等。<br>
 > J2SE(Java Platform Standard Edition) 标准版：该技术体系是其他两者的基础，可以完成一些桌面应用程序的开发。
 
-![Javase是两者的基础](images/Java/Java版本简介.png)<br>
+![Javase是两者的基础](..\images/Java/Java版本简介.png)<br>
 
 * Java语言的特点：跨平台<br>
 通过Java的编译器编译成了Class文件以后，在不同主机上面运行Java的执行文件时，由不同版本的JVM来处理Class文件。(所以是简介实现了跨平台，由不同版本的Jvm最终执行成不同系统所能识别的系统命令)<br>
 
-![Java的特点：跨平台](images/Java/Java语言的特点-跨平台.png)<br>
+![Java的特点：跨平台](..\images/Java/Java语言的特点-跨平台.png)<br>
 
 * Java的编译流程<br>
 
-![](images/Java/Java编译.png)
+![](..\images/Java/Java编译.png)
 
-一、 Java数据类型
+## Java基础
+
+Java关键字，被Java语言赋予了特殊的含义的单词，并且作为保留字，不可以被用户作为其他变量、方法、类名使用。<br>
+其特点是：*关键字的字母都为小写*。
+
+> 保留关键字，用于定义Java的基本数据类型变量时<br>
+![](../images/Java/Java基本数据类型关键字.png)
+
+> 而那些用于赋予数据类型值的保留关键字有<br>
+![](../images/Java/Java数据类型值的保留关键字.png)
+
+> 虽然Java是一个面向对象的语言，但是流程控制语句也不可缺少<br>
+![](../images/Java/Java流程控制语句的关键字.png)
+
+> 用于修饰访问权限的关键字有<br>
+![](../images/Java/java访问权限关键字.png)
+
+> 常量的修饰符关键字有<br>
+![](../images/Java/Java修饰符关键字.png)
+
+> 用于定义类与类之间的关系的关键字有<br>
+![](../images/Java/Java定义类的关键字.png)
+
+> 创建实例对象以及判断是否时该对象的实例的保留关键字有<br>
+![](../images/Java/Java实例相关的关键字.png)
+
+> Java中异常处理所使用的关键字有<br>
+![](../images/Java/Java异常处理的关键字.png)
+
+> 创建包、导入包所使用的关键字<br>
+![](../images/Java/Java包的关键字.png)
+
+> 其他修饰符关键字，使用场景较少<br>
+![](../images/Java/Java其他少见关键字.png)
+
+*注意*：
+`main`不是关键字，`main`只是一个标识符，不过有点特殊，虚拟机可以识别。<br>
+`main`（主函数）的作用
+1. 可以保证程序的独立运行
+2. 是程序的执行入口
+3. 可以被Java虚拟机（`JVM`）所识别
+`main`方法不是必须要在类中定义的，如果想要运行这个类，需要添加。否则不需要。
+
+一、Java数据类型
 
 * 基本数据类型
 
