@@ -86,6 +86,9 @@
 
 现在从服务器上面`clone`就不需要密码了.
 
+为了安全起见,修改`git`用户的shell权限,修改`/etc/passwd`文件.<br>
+![](images/Linux/修改git用户的shell权限.png)
+
 ```
 Tips:
     使用 `git init --bare` 初始化仓库没有 working tree (工作区)
