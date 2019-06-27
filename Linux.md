@@ -40,7 +40,9 @@
 初始化项目仓库并查看该文件权限<br>
 ![](images/Linux/初始化仓库并查看权限.png)
 
-目前该目录的权限是>root 用户 现在更改为>git 用户<br>
+目前该目录的权限是>root 用户 现在更改为>git 用户
+> chown -R `<user>`:`<group>` `<file>`
+
 ![](images/Linux/更改目录权限.png)
 
 更改完毕后,本地进行`clone` 测试<br>
