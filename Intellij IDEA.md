@@ -2,7 +2,7 @@
 
 ## <a id="IDEA简介">IDEA简介</a>
 
-* 一 、IDEA的介绍(#IDEA简介)
+* 一 、[IDEA的介绍](#IDEA简介)
 
   Idea是捷克JetBrians公司的产品，是目前最好用的Java开发工具之一。
 
