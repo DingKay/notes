@@ -1,7 +1,5 @@
 ## Intellij IDEA
 
-## <a id="IDEA简介">IDEA简介</a>
-
 * 一 、[IDEA的介绍](#IDEA简介)
 
   Idea是捷克JetBrians公司的产品，是目前最好用的Java开发工具之一。
@@ -53,7 +51,7 @@
   	> 		2017.3一般为11月份发布的
 
   ## IDEA安装前的准备
-
+## <a id="IDEA简介">IDEA简介</a>
   > - 2GB RAM Minimum ，4GB RAM Recommended
   > - 1.5GB Hard Disk Space + At Least 1GB For Caches
   > - 1024 × 768 Minimum Screen Resolution
