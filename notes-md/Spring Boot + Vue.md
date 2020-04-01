@@ -181,3 +181,199 @@ Spring Boot 也可以直接打成Jar包运行，首先需要添加一个*plugin*
 
 ### 2.1 不使用spring-boot-starter-parent
 
+*spring-boot-starter-parent* 主要提供了以下默认配置
+
+* Java版本默认使用1.8
+* 编码格式默认使用UTF-8
+* 提供*Dependency Management* 进行项目依赖的版本管理
+* 默认的资源过滤与插件配置
+
+使用*Dependency Management*
+
+```xml
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>2.0.4.RELEASE</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+```
+
+编码格式
+
+```xml
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+  </properties>
+```
+
+添加一个*plugin*
+
+```xml
+  <plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-compiler-plugin</artifactId>
+    <version>3.1</version>
+    <configuration>
+      <source>1.8</source>
+      <target>1.8</target>
+    </configuration>
+  </plugin>
+```
+
+### 2.2 @SpringBootApplication
+
+@SpringBootApplication是一个组合注解
+
+```java
+@Target({ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Inherited
+@SpringBootConfiguration
+@EnableAutoConfiguration
+@ComponentScan(
+    excludeFilters = {@Filter(
+    type = FilterType.CUSTOM,
+    classes = {TypeExcludeFilter.class}
+), @Filter(
+    type = FilterType.CUSTOM,
+    classes = {AutoConfigurationExcludeFilter.class}
+)}
+)
+public @interface SpringBootApplication {
+	// ...
+}
+```
+
+这个注解由三个注解组成
+
+1. @SpringBootConfiguration
+
+```java
+@Target({ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Configuration
+public @interface SpringBootConfiguration {
+}
+```
+
+原来就是一个@Configuration，所以@SpringBootApplication的功能就是表明这是一个配置类，可以在这个类配置Bean，这个类所扮演的角色有点类似于Spring中的applicationContext.xml文件的角色
+
+2. @EnableAutoConfiguration表示开启自动化配置，SpringBoot中的自动化配置是*非侵入式*的，在任意时刻，都可以自定义配置代替自动化配置中的某一个配置
+3. @ComponentScan包扫描，默认扫描当前类所在的包路径
+
+虽然@SpringBootApplication包含了@Configuration注解，但是我们可以创建一个新类来配置Bean，这样便于配置的管理，这个类加上@ComponentScan注解即可
+
+项目中的@ComponentScan注解除了会扫描@Service、@Repository、@Component、@Controller和@RestController等之外，也会扫描@Configuration注解的类
+
+### 2.3 定制banner
+
+在resource路径下创建*banner.txt*文件，即可定制启动banner
+
+想要关闭*banner*也是可以的，修改启动类的*main*方法
+
+```java
+SpringApplicationBuilder builder = new SpringApplicationBuilder(App.class);
+builder.bannerMode(Banner.Mode.OFF).run(args);
+```
+
+### 2.4 Web容器配置
+
+#### 2.4.1 Tomcat配置
+
+1. 常规配置
+
+在Spring Boot 项目中，可以内置*Tomcat*、*Jetty* 、*Undertow* 、*Netty*等容器，当添加了*spring-boot-starter-web*依赖后，会默认使用*Tomcat*做为Web容器，对*Tomcat*做进一步配置，创建*application.properties*
+
+```properties
+## tomcat端口号
+server.port=8080
+## 错误页跳转路径
+server.error.path=/error
+## session失效时间，不加单位默认是秒
+## 且由于Tomcat配置失效时间为分钟，因此这里如果是秒，则被转换成一个不超过所配置秒数的最大分钟数
+server.servlet.session.timeout=30m
+## 项目路径，不配置默认为 /
+server.servlet.context-path=/chapter04
+## uri请求编码
+server.tomcat.uri-encoding=UTF-8
+## tomcat最大线程数
+server.tomcat.max-threads=20
+## tomcat存放运行日志和临时文件的基本路径，若不配置，则默认使用系统的临时目录
+server.tomcat.basedir=/home/kay/tmp
+```
+
+2. HTTPS配置
+
+由于HTTPS具有良好的安全性，在开发中得到广泛的应用，在JDK中提供了一个Java数字证书管理工具*keytool*，在*\jdk\bin*目录下，通过这个工具可以自己生成一个数字证书
+
+```powershell
+keytool -genkey -alias kay -keyalg RSA -keysize 2048 -keystore kay.p12 -validity 365
+```
+
+命令解释
+
+* -genkey 创建一个新密钥
+* -alias keystore的别名
+* -keyalg 表示加密算法RSA，一种非对称加密算法
+* -keysize 密钥长度
+* -keystore 生成的密钥存放位置
+* -validity 密钥有时间，单位：天
+
+在*application.properties*文件中新增配置
+
+```xml
+## 证书别名
+server.ssl.key-alias=kay
+## 证书文件名
+server.ssl.key-store=classpath:kay.p12
+## 证书密码
+server.ssl.key-store-password=980217
+```
+
+此时如果以*HTTP*请求访问就会访问失败，是因为*Spring Boot*不支持同时在配置中启动*HTTP*和*HTTPS*
+
+![](../images/spring boot + vue/开启ssl后使用http访问.png)
+
+配置请求重定向
+
+```java
+    @Bean
+    public TomcatServletWebServerFactory webServerFactory() {
+        TomcatServletWebServerFactory webServerFactory = new TomcatServletWebServerFactory() {
+            @Override
+            protected void postProcessContext(Context context) {
+                SecurityConstraint constraint = new SecurityConstraint();
+                constraint.setUserConstraint("CONFIDENTIAL");
+                SecurityCollection collection = new SecurityCollection();
+                collection.addPattern("/*");
+                constraint.addCollection(collection);
+                context.addConstraint(constraint);
+            }
+        };
+        webServerFactory.addAdditionalTomcatConnectors(createTomcatConnector());
+        return webServerFactory;
+    }
+
+    private Connector createTomcatConnector() {
+        Connector connector = new Connector("org.apache.coyote.http11.Http11NioProtocol");
+        connector.setScheme("http");
+        connector.setPort(80);
+        connector.setSecure(false);
+        connector.setRedirectPort(8080);
+        return connector;
+    }
+```
+
+再次使用*HTTP*访问则可以重定向至*HTTPS*
+
+
+
