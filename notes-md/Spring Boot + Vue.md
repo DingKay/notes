@@ -375,5 +375,376 @@ server.ssl.key-store-password=980217
 
 再次使用*HTTP*访问则可以重定向至*HTTPS*
 
+#### 2.4.2 Jetty配置
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+    <exclusions>
+        <exclusion>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-tomcat</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-jetty</artifactId>
+</dependency>
+```
+
+#### 2.4.3 Undertow配置
+
+````xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+    <exclusions>
+        <exclusion>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-tomcat</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-undertow</artifactId>
+</dependency>
+````
+
+### 2.5 Properties配置
+
+application.properties的配置可以放在项目中的四个目录下；
+
+* 项目根目录下的*config*文件夹中    ## 优先级为1
+* 项目根目录下                             ## 优先级为2
+* *classpath*下的*config*文件夹中     ## 优先级为3
+* *classpath*目录下                        ## 优先级为4 
+
+如果这四个位置都有*application.properties*文件，那么会按照优先级查找配置信息，并加载到*Spring Environment*中
+
+如果使用了*application.yml*做为配置文件，那么优先级与其一致
+
+默认情况下按顺序依次查找*application.properties*文件并加载，如果不想使用*application.properties*做为配置文件名，也可以自定义。例如，在*resources*目录下创建一个配置文件*app.properties*然后将项目打成*jar*包，打包成功后，使用如下命令运行；
+
+`java -jar xxx.1.0-SNAPSHOT.jar --spring.config.name=app`
+
+在运行时指定了文件名，使用*spring.config.location*可以指定配置文件所在的目录（注：需要以*/*结束）
+
+`java -jar xxx.1.0-SNAPSHOT.jar --spring.config.name=app -spring.config-location=classpath:/`
+
+### 2.6 类型安全配置属性
+
+无论是*properties*配置还是*YAML*配置，最终都会被加载到*Spring Environment* 中，Spring提供了*@Value*注解以及*EnvironmentAware*接口来将*Spring Environment*中的数据注入到属性上，*Spring Boot*对此进一部提出了类型安全配置属性（Type-safe Configuration Properties) 这样即使在数据量非常庞大的情况下，也可以更加方便地将配置文件中的数据注入到Bean中
+
+```yaml
+book:
+  name: 三国演义
+  author: 罗贯中
+  price: 30
+```
+
+将这段配置注入到Bean中
+
+```java
+@Component
+@ConfigurationProperties(prefix = "book")
+public class Book {
+    private String name;
+    private String author;
+    private float price;
+    // Getter&Setter
+}
+```
+
+代码解释
+
+* @ConfiguirationProperties中的*prefix*属性描述了要加载的配置文件中的前缀
+* 如果配置文件是*YAML*文件，那么可以将数据注入一个集合中
+* Spring Boot采用了一种宽松的规则来进行属性绑定，如果Bean中的属性名为authorName，那么配置文件中的属性可以是*bootk.author_name、book.authorName*或者*book.AUTHORNAME*
+
+`使用@ConfigurationProperties注解时，IDEA提示：Spring Boot Configuration Annotation Processor not configured`
+
+![](../images/spring boot + vue/IDEA提示错误1.png)
+
+解决：![](../images/spring boot + vue/IDEA提示错误1-解决.png)
+
+添加依赖
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-configuration-processor</artifactId>
+    <optional>true</optional>
+</dependency>
+```
+
+### 2.7 YAML配置
+
+#### 2.7.1 常规配置
+
+*YAML*是*JSON*的超集，简洁而强大。是一种专门用来书写配置文件的语言，可以替代*application.properties*，在创建一个*Spring Boot*项目时，引入的*spring-boot-starter-web*依赖间接的引入了*snakeyaml*依赖，*snakeyaml*会实现对*YAML*配置的解析，利用缩进表示层级关系，并且大小写敏感。
+
+```yaml
+server:
+  port: 443
+  tomcat:
+    max-threads: 5
+    uri-encoding: UTF-8
+    basedir: /home/kay/tmp/
+  error:
+    path: /error
+  servlet:
+    context-path: /
+    session:
+      timeout: 5m
+  ssl:
+    key-alias: kay
+    key-store-password: xxxxx
+    key-store: classpath:kay.p12
+```
+
+#### 2.7.2 复杂配置
+
+*YAML*不仅可以配置常规属性，也可以配置复杂属性。
+
+```yaml
+my:
+  address:
+    name: DingKay
+    address: Nanjing
+    favorites:
+      - 玩游戏
+      - 睡觉
+      - 看书
+```
+
+注入的实体
+
+```java
+@Component
+@ConfigurationProperties("person.my")
+public class Person {
+    private String name;
+    private String address;
+    private List<String> favorites;
+    // Getter&Setter
+}
+```
+
+注入的结果
+
+![](../images/spring boot + vue/person-my.png)
+
+还支持更复杂的配置，即集合中也可以是一个对象
+
+```yaml
+school:
+  name:
+  students:
+    - name: 小一
+      age: 12
+    - name: 王二
+      age: 13
+    - name: 丁一
+      age: 23
+```
+
+注入的实体
+
+```java
+@Configuration
+@EnableConfigurationProperties(School.class)
+@ConfigurationProperties("school")
+public class School {
+    private String name;
+    private List<Student> students;
+    // Getter&Setter
+}
+```
+
+注入的结果
+
+![](../images/spring boot + vue/yaml-school.png)
+
+在*Spring Boot*中使用*YAML*虽然方便，但是*YAML*也有一些缺陷，例如无法使用*@PropertySource*注解加载*YAML*文件，如果项目中有这种需求，还是需要使用*Properties*格式的配置文件。
+
+Tips:当*properties*和*yaml*文件同时存在时，如*application.yml* *application.properties*两个文件同时存在，此时的优先级为：`application.properties > application.yaml`
+
+### 2.8 Profile
+
+频繁的切换开发环境，测试环境以及生产环境，这个时候大量的配置需要更改，例如数据库配置、redis配置、mongodb配置、jms配置等。Spring提供了@Profile注解，Spring Boot则更进一步提供了更加简洁的解决方案，Spring Boot中约定的不同环境下配置文件名称规则为*application-{profile}.properties / yml*，profile占位符表示当前环境的名称，具体配置如下
+
+1. **创建配置文件**
+
+首先在resource目录下创建两个配置文件：*application-dev.yml和*application-prod.yml*，分别表示开发环境中的配置和生产环境中的配置。其中，*application-dev.yml文件的内容如下
+
+```properties
+server.port=8080
+```
+
+*application-prod.properties*文件的内容如下
+
+```properties
+server.port=80
+```
+
+2. **配置*application.yml***
+
+```yaml
+spring:
+  profiles:
+    active: dev
+```
+
+这个表示使用*application-dev.yml*文件启动项目，若将dev改成prod，则表示使用*application-prod.yml*启动项目，项目启动成功后，就可以通过相应的端口号访问了。
+
+3. **在代码中配置**
+
+对于第二部在*application.yml*中添加的配置，我们也可以在代码中添加配置来完成，在启动类的*main*方法上添加代码，可以替换第二步的配置
+
+```java
+SpringApplicationBuilder builder = new SpringApplicationBuilder(Application.class);
+        builder.application().setAdditionalProfiles("dev");
+        builder.run(args);
+```
+
+4. **在项目启动时配置**
+
+对于第二步和第三步提到的两种配置方式，也可以在项目打成*jar*包后启动时，在命令行动态指令当前环境，示例如下
+
+```powershell
+java -jar xxxx.1.0-SNAPSHOT.jar --spring.profiles.active=prod
+```
+
+对于以上三种方式，若同时开启三种配置*Profile*配置，优先级如下 4 > 2 > 3
+
+启动参数*--spring.profiles.active* 优先级最高，其次是修改*application.yml*文件，然后是在*main*方法中添加代码
+
+## 3.0 Spring Boot 整合视图层
+
+在目前的企业级开发中，前后端分离是趋势，但是视图层技术还占有一席之地，Spring Boot对视图层技术提供了很好的支持，官方推荐使用的模板引擎是*Thymeleaf*，不过像*FreeMarker*也支持，并不推荐使用*JSP*
+
+### 3.1 整合Thymeleaf
+
+*Thymeleaf*是新一代Java模板引擎，支持HTML原型，既可以让前端工程师在浏览器中直接打开查看样式，也可以让后端工程师结合真实数据查看显示效果，同时，Spring Boot提供了*Thymeleaf*自动化配置解决方案，因此在Spring Boot中使用Thymeleaf非常方便，整合步骤如下
+
+1. **创建工程，添加依赖**
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-thymeleaf</artifactId>
+    </dependency>
+</dependencies>
+```
+
+2. **配置Thymeleaf**
+
+Spring Boot为Thymeleaf提供了自动化配置类*ThymeleafAutoConfiguration*，相关的配置属性在*ThymeleafProperties*类中，ThymeleafProperties部分源码如下
+
+```java
+@ConfigurationProperties(
+    prefix = "spring.thymeleaf"
+)
+public class ThymeleafProperties {
+    private static final Charset DEFAULT_ENCODING;
+    public static final String DEFAULT_PREFIX = "classpath:/templates/";
+    public static final String DEFAULT_SUFFIX = ".html";
+    private boolean checkTemplate = true;
+    private boolean checkTemplateLocation = true;
+    private String prefix = "classpath:/templates/";
+    private String suffix = ".html";
+    private String mode = "HTML";
+    // ...
+}
+```
+
+由此配置可以看到，默认的模板位置在*classpath：/templates/*，默认的模板配置后缀为*.html*
+
+如果想对默认的*Thymeleaf*配置参数进行自定义配置，那么可以直接在*application.properties / yml*中进行配置，部分常见配置如下 
+
+```properties
+# 是否开启缓存，开发时可设置为false，默认为true
+spring.thymeleaf.cache=false
+# 检查模板是否存在，默认为true
+spring.thymeleaf.check-template=true
+# 检查模板位置是否存在，默认为true
+spring.thymeleaf.check-template-loaction=true
+# 模板文件编码
+spring.thymeleaf.encoding=UTF-8
+# 模板文件位置
+spring.thymeleaf.prefix=classpath:/templates/
+# Content-Type配置
+spring.thymeleaf.servlet.content-type=text/html
+# 模板文件后缀
+spring.thymeleaf.suffix=.html
+```
+
+3. **配置控制器**
+
+```java
+@Controller
+public class BookController {
+    @GetMapping("book")
+    public ModelAndView book() {
+        List<Book> books = new ArrayList<>();
+        Book book1 = new Book();
+        book1.setAuthor("罗贯中");
+        book1.setName("三国演义");
+        book1.setPrice(25);
+
+        Book book2 = new Book();
+        book2.setAuthor("曹雪芹");
+        book2.setName("红楼梦");
+        book2.setPrice(32);
+
+        books.add(book1);
+        books.add(book2);
+
+        ModelAndView modelAndView = new ModelAndView();
+        modelAndView.addObject("books", books);
+        modelAndView.setViewName("books");
+        return modelAndView;
+    }
+```
+
+4. **创建视图**
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Book</title>
+</head>
+<body>
+<table border="1">
+    <tr>
+    <td>图书名称</td>
+    <td>图书作者</td>
+    <td>图书售价</td>
+    </tr>
+    <tr th:each="book:${books}">
+    <!--/*@thymesVar id="book" type="com.dk.entity.Book"*/-->
+    <td th:text="${book.author}"></td>
+    <td th:text="${book.name}"></td>
+    <td th:text="${book.price}"></td>
+    </tr>
+</table>
+</body>
+</html>
+```
+
+5. **运行**
+
+![](../images/spring boot + vue/thymeleaf-book.png)
+
 
 
