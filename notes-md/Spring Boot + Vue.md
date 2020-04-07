@@ -746,5 +746,155 @@ public class BookController {
 
 ![](../images/spring boot + vue/thymeleaf-book.png)
 
+### 3.2 整合FreeMarker
 
+FreeMarker是一个非常古老的模板引擎，可以用在Web环境或者非Web环境中，与Thymeleaf不同，FreeMarker需要经过解析才能够在浏览器中展示出来。FreeMarker不仅可以用来配置HTML页面模板，也可以作为电子邮件模板，配置文件模板以及源码模板等。Spring Boot对FreeMarker整合也提供了很好的支持
 
+1. **创建项目，添加依赖**
+
+创建Spring Boot项目，添加*spring-boot-starter-web*和*spring-boot-starter-freemarker*依赖
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-freemarker</artifactId>
+    </dependency>
+</dependencies>
+```
+
+2. **配置FreeMarker**
+
+Spring Boot对FreeMarker也提供了自动化配置类*FreeMarkerAutoConfiguration*， 相关的配置在*FreeMarkerProperties*中
+
+```java
+@ConfigurationProperties(
+    prefix = "spring.freemarker"
+)
+public class FreeMarkerProperties extends AbstractTemplateViewResolverProperties {
+    public static final String DEFAULT_TEMPLATE_LOADER_PATH = "classpath:/templates/";
+    public static final String DEFAULT_PREFIX = "";
+    public static final String DEFAULT_SUFFIX = ".ftl";
+    private Map<String, String> settings = new HashMap();
+    private String[] templateLoaderPath = new String[]{"classpath:/templates/"};
+    private boolean preferFileSystemAccess = true;
+    // ...
+}
+```
+
+从默认配置中可以看到，FreeMarker默认模板位置和Thymeleaf相同，都在*classpath：/templates/*中，默认文件后缀为*.ftl*，可以在*application.properties*中对这些默认配置进行修改
+
+```yaml
+spring:
+  freemarker:
+    # HttpServletRequest的属性是否可以覆盖Controller中model的同名项
+    allow-request-override: false
+    # HttpSession的属性值是否可以覆盖Controller中model的同名项
+    allow-session-override: false
+    # 是否开启缓存
+    cache: false
+    # 模板文件编码
+    charset: utf-8
+    # 是否检查模板位置
+    check-template-location: true
+    # Content-Type的值
+    content-type: text/html
+    # 是否将HttpServletRequest中的属性添加到model中
+    expose-request-attributes: false
+    # 是否将HttpSession中的属性添加到model中
+    expose-session-attributes: false
+    # 模板文件后缀
+    suffix: .ftl
+    # 模板文件位置
+    template-loader-path: classpath:/templates/
+```
+
+3. **配置控制器**
+
+与Thymeleaf相同
+
+4. **创建视图**
+
+按照配置，在resources/templates目录下创建books.ftl文件
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+</head>
+<title>图书列表</title>
+<body>
+<table border="1">
+    <tr>
+        <td>图书名称</td>
+        <td>图书作者</td>
+        <td>图书售价</td>
+    </tr>
+    <#--  books不为空 且有数据  -->
+    <#if books ??&& (books?size>0)>
+    <#--  遍历集合  -->
+    <#list books as book>
+    <tr>
+        <td>${book.name}</td>
+        <td>${book.author}</td>
+        <td>${book.price}</td>
+    </tr>
+    </#list>
+    </#if>
+</table>
+</body>
+</html>
+```
+
+## 4.0 Spring Boot整合Web开发
+
+### 4.1 返回JSON数据
+
+#### 4.1.1 默认实现
+
+JSON是目前主流的前后端数据传输方式，*Spring MVC*中使用消息转换器*HttpMessageConverter*对*JSON*的转换提供了很好的支持，在Spring Boot中更进一步，对相关配置做了进一步的简化。默认情况下，创建一个Spring Boot项目后，添加*spring-boot-starter-web*依赖，这个依赖中默认加入了*jackson-databind*作为*JSON*处理器，此时不需要添额外的*JSON*处理器就能返回一段*JSON*了
+
+```java
+public class Book {
+    private String name;
+    private String author;
+    @JsonIgnore
+    private Float price;
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private Date publicationDate;
+    // getter&Setter
+}
+```
+
+创建BookController
+
+```java
+@Controller
+public class BookController {
+    @GetMapping("book")
+    @ResponseBody
+    public Book book() {
+        Book book = new Book();
+        book.setName("三国演义");
+        book.setAuthor("罗贯中");
+        book.setPrice(32f);
+        book.setPublicationDate(new Date());
+        return book;
+    }
+}
+```
+
+当然，如果频繁的用到@ResponseBody注解，那么可以用@RestController组合注解代替@Controller和@ResponseBody
+
+此时访问*https://localhost/book*
+
+![](../images/spring boot + vue/book的json返回.png)
+
+这是Spring Boot自带的处理方式，如果采用这种方式，那么对于字段忽略、日期格式化等常见需求都可以用注解来解决
+
+这是通过Spring中默认提供的*MappingJackson2HttpMessageConverter*来实现的，当然这里也可以根据实际需求自定义*JSON*转换器
