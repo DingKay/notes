@@ -510,8 +510,8 @@ server:
 *YAML*不仅可以配置常规属性，也可以配置复杂属性。
 
 ```yaml
-my:
-  address:
+person:
+  my:
     name: DingKay
     address: Nanjing
     favorites:
@@ -898,3 +898,4 @@ public class BookController {
 这是Spring Boot自带的处理方式，如果采用这种方式，那么对于字段忽略、日期格式化等常见需求都可以用注解来解决
 
 这是通过Spring中默认提供的*MappingJackson2HttpMessageConverter*来实现的，当然这里也可以根据实际需求自定义*JSON*转换器
+
