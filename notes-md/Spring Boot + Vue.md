@@ -899,3 +899,23 @@ public class BookController {
 
 这是通过Spring中默认提供的*MappingJackson2HttpMessageConverter*来实现的，当然这里也可以根据实际需求自定义*JSON*转换器
 
+#### 4.1.2 自定义转换器
+
+常见的*JSON*处理器除了*jackson-databind*外，还有*Gson*和*fastjson*
+
+1. 使用*Gson*
+
+*Gson*是Google的一个开源*JSON*解析框架，使用*Gson*首先需要除去默认的*jackson-databind*依赖，然后加入*Gson*依赖
+
+```
+
+```
+
+由于*Spring Boot*中默认提供了*Gson*的自动转换类*GsonHttpMessageConvertersConfiguration*，因此*Gson*的依赖添加成功后，可以像使用*jackson-databind*那样直接使用*Gson*，但是在*Gson*进行转换时，如果想对日期类型进行格式化，那么还需要自定义*HttpMessageConverter*，自定义*HttpMessageConverter*可以通过如下方式。
+
+​	首先看*GsonHttpMessageConvertersConfiguration*中的一段源码；
+
+```
+
+```
+
