@@ -42,11 +42,11 @@ mvn archetype:generate -DgroupId=com.dk -DartifactId=chapter01 -DarchetypeArtifa
 
 使用Eclipse创建Maven工程
 
-略
+// 略
 
 使用IntelliJ IDEA 创建Maven工程
 
-略
+// 略
 
 ### 1.2 项目构建
 
@@ -152,11 +152,11 @@ public class App {
 mvn spring-boot:run
 ```
 
+![](../images/Spring Boot + Vue/mvn启动springboot.png)
+
 #### 1.3.2 直接运行main方法
 
 直接在IDE中运行App类的main方法；
-
-![](../images/Spring Boot + Vue/mvn启动springboot.png)
 
 #### 1.3.3 打包启动
 
@@ -270,7 +270,7 @@ public @interface SpringBootConfiguration {
 2. @EnableAutoConfiguration表示开启自动化配置，SpringBoot中的自动化配置是*非侵入式*的，在任意时刻，都可以自定义配置代替自动化配置中的某一个配置
 3. @ComponentScan包扫描，默认扫描当前类所在的包路径
 
-虽然@SpringBootApplication包含了@Configuration注解，但是我们可以创建一个新类来配置Bean，这样便于配置的管理，这个类加上@ComponentScan注解即可
+虽然@SpringBootApplication包含了@Configuration注解，但是我们可以创建一个新类来配置Bean，这样便于配置的管理，这个类加上@Configuration注解即可
 
 项目中的@ComponentScan注解除了会扫描@Service、@Repository、@Component、@Controller和@RestController等之外，也会扫描@Configuration注解的类
 
@@ -907,15 +907,180 @@ public class BookController {
 
 *Gson*是Google的一个开源*JSON*解析框架，使用*Gson*首先需要除去默认的*jackson-databind*依赖，然后加入*Gson*依赖
 
-```
-
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+        <exclusions>
+            <exclusion>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+    <dependency>
+        <groupId>com.google.code.gson</groupId>
+        <artifactId>gson</artifactId>
+    </dependency>
+</dependencies>
 ```
 
 由于*Spring Boot*中默认提供了*Gson*的自动转换类*GsonHttpMessageConvertersConfiguration*，因此*Gson*的依赖添加成功后，可以像使用*jackson-databind*那样直接使用*Gson*，但是在*Gson*进行转换时，如果想对日期类型进行格式化，那么还需要自定义*HttpMessageConverter*，自定义*HttpMessageConverter*可以通过如下方式。
 
 ​	首先看*GsonHttpMessageConvertersConfiguration*中的一段源码；
 
+```java
+@Bean
+@ConditionalOnMissingBean
+public GsonHttpMessageConverter gsonHttpMessageConverter(Gson gson) {
+    GsonHttpMessageConverter converter = new GsonHttpMessageConverter();
+    converter.setGson(gson);
+    return converter;
+}
 ```
 
+@ConditionalOnMissingBean注解表示当项目中没有提供*GsonHttpMessageConverter*时才会使用默认的*GsonHttpMessageConverter*，所以只需要提供一个*GsonHttpMessageConverter*即可；
+
+```java
+@Configuration
+public class GsonConfig {
+    @Bean
+    GsonHttpMessageConverter gsonHttpMessageConverter() {
+        GsonHttpMessageConverter converter = new GsonHttpMessageConverter();
+        GsonBuilder gsonBuilder = new GsonBuilder();
+        gsonBuilder.setDateFormat("yyyy-MM-dd");
+        gsonBuilder.excludeFieldsWithModifiers(Modifier.PROTECTED);
+        Gson gson = gsonBuilder.create();
+        converter.setGson(gson);
+        return converter;
+    }
+}
 ```
 
+代码解释:
+
+* @Configuration/@Bean 提供了一个*GsonHttpMessageConverter*的实例
+* 设置Gson解析日期的格式
+* 设置Gson解析时修饰符为Protected的字段被过滤
+* 创建Gson对象放入GsonHttpMessageConverter的实例中并返回converter
+
+此时，将Book类中我们需要隐藏返回的字段*price*的修饰符修改为*Protected*
+
+```java
+public class Book {
+    private String name;
+    private String author;
+    protected Float price;
+    private Date publicationDate;
+    // ...
+}
+```
+
+2. 使用*fastjson*
+
+fastjson是阿里巴巴开源的JSON解析框架，是目前JSON解析速度最快的开源框架。框架也可以集成到*Spring Boot*中，不同于*Gson*，fastjson集成后并不能立马使用，需要开发者提供相应的*HttpMessageConverter*后才能使用。
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+        <exclusions>
+            <exclusion>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+    <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>fastjson</artifactId>
+        <version>1.2.47</version>
+    </dependency>
+</dependencies>
+```
+
+配置fastjson的HttpMessageConverter
+
+```java
+@Configuration
+public class MyFastJsonConfig {
+    @Bean
+    FastJsonHttpMessageConverter fastJsonHttpMessageConverter() {
+        FastJsonHttpMessageConverter converter = new FastJsonHttpMessageConverter();
+        FastJsonConfig config = new FastJsonConfig();
+        config.setDateFormat("yyyy-MM-dd");
+        config.setCharset(StandardCharsets.UTF_8);
+        config.setSerializerFeatures(
+                SerializerFeature.WriteClassName,
+                SerializerFeature.WriteMapNullValue,
+                SerializerFeature.PrettyFormat,
+                SerializerFeature.WriteNullListAsEmpty,
+                SerializerFeature.WriteNullStringAsEmpty
+        );
+        converter.setFastJsonConfig(config);
+        return converter;
+    }
+}
+```
+
+代码解释：
+
+* 自定义MyFastJsonConfig，完成对*FastJsonHttpMessageConverterBean*的提供
+* *config.setSerializerFeatures*配置了JSON解析过程的一些细节，例如日期格式、数据编码、是否在生成的JSON中输出类名、是否输出value为null的数据、生成的JSON格式化、空集合输出`[]`而非null、空字符串输出`""`而非null等基础配置
+
+![](../images/spring boot + vue/fastjson中文乱码.png)
+
+现在还需要配置一下响应编码，否则返回的JSON中文会乱码，在*application.properties*中添加如下配置
+
+```yaml
+spring:
+  http:
+    encoding:
+      force-response: true
+```
+
+![](../images/spring boot + vue/fastjson中文乱码-解决.png)
+
+对于*FastJsonHttpMessageConverter*的配置，除了上面这种方式之外，还有另外一种方式。
+
+在*Spring Boot*项目中，当开发者引入*spring-boot-starter-web*以来后，该依赖又依赖了*spring-boot-autoconfigure*，在这个自动化配置中，有个*WebMvcAutoConfiguration*类提供了对*Spring MVC*最基本的配置，如果某一项自动化配置不满足开发需求，开发者可以针对该项自定义配置，只需实现*WebMvcConfigurer*接口即可（在Spring 5.0 之前是通过继承*WebMvcConfigurerAdapter*类来实现的）
+
+```java
+@Configuration
+public class MyWebMvcConfig implements WebMvcConfigurer {
+    @Override
+    public void configureMessageConverters(List<HttpMessageConverter<?>> converters) {
+        FastJsonHttpMessageConverter converter = new FastJsonHttpMessageConverter();
+        FastJsonConfig config = new FastJsonConfig();
+        config.setDateFormat("yyyy-MM-dd");
+        config.setCharset(StandardCharsets.UTF_8);
+        config.setSerializerFeatures(
+                SerializerFeature.PrettyFormat,
+                SerializerFeature.WriteNullListAsEmpty,
+                SerializerFeature.WriteMapNullValue,
+                SerializerFeature.WriteNullStringAsEmpty
+        );
+        converter.setFastJsonConfig(config);
+        converters.add(converter);
+    }
+}
+```
+
+代码解释：
+
+* 自定义*MyWebMvcConfig*类并实现*WebMvcConfigurer*接口中的*configureMessageConverters*方法
+* 将自定义的*FastJsonHttpConverter*加入*converters*中
+
+`注意：如果使用了Gson。也可以采用这种方式配置，但是不推荐，因为项目中没有GsonHttpMessageConverter时，Spring Boot会自己提供一个GsonHttpMessageConverter，此时重写configureMessageConverters方法，参数converters中已经有GsonHttpMessageConverter的实例了，需要替换已有的GsonHttpMessageConverter实例，操作比较麻烦，所以对于Gson推荐直接提供GsonHttpMessageConverter `
+
+### 4.2 静态资源访问
+
+在*Spring MVC*中，对于静态资源都需要开发者手动配置静态资源过滤，*Spring Boot*中对此提供了自动化配置，简化静态资源过滤配置。
+
+#### 4.2.1 默认策略
+
+*Spring Boot*中对于Spring MVC的自动化配置都在*WebMvcAutoConfiguration*类中，因此对于默认的静态资源过滤策略可以从这个类中一窥究竟。
+
+在*WebMvcAutoConfiguration*类中有一个静态内部类*WebMvcAutoConfigurationAdapter*，实现了4.1节提到了*WebMvcAutoConfigurer*接口，
