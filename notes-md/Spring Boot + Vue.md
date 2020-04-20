@@ -1083,4 +1083,50 @@ public class MyWebMvcConfig implements WebMvcConfigurer {
 
 *Spring Boot*中对于Spring MVC的自动化配置都在*WebMvcAutoConfiguration*类中，因此对于默认的静态资源过滤策略可以从这个类中一窥究竟。
 
-在*WebMvcAutoConfiguration*类中有一个静态内部类*WebMvcAutoConfigurationAdapter*，实现了4.1节提到了*WebMvcAutoConfigurer*接口，
+在*WebMvcAutoConfiguration*类中有一个静态内部类*WebMvcAutoConfigurationAdapter*，实现了4.1节提到了*WebMvcAutoConfigurer*接口，该接口中有一个方法*addResourceHandlers*是用来配置静态资源过滤的。方法在*WebMvcAutoConfigurationAdapter*类中得到了实现，部分核心代码如下：
+
+```java
+String staticPathPattern = this.mvcProperties.getStaticPathPattern();
+                if (!registry.hasMappingForPattern(staticPathPattern)) {
+                    this.customizeResourceHandlerRegistration(registry.addResourceHandler(new String[]{staticPathPattern}).addResourceLocations(getResourceLocations(this.resourceProperties.getStaticLocations())).setCachePeriod(this.getSeconds(cachePeriod)).setCacheControl(cacheControl));
+                }
+```
+
+Spring Boot 在这里进行了默认静态资源过滤配置，其中*staticPathPattern*默认定义在*WebMvcProperties*中，定义内容如下：
+
+```java
+this.staticPathPattern = "/**";
+```
+
+*this.resourceProperties.getStaticLocations()*获取到默认静态资源位置定义在*ResourceProperties*中
+
+```java
+this.staticLocations = CLASSPATH_RESOURCE_LOCATIONS = new String[]{"classpath:/META-INF/resources/", "classpath:/resources/", "classpath:/static/", "classpath:/public/"};
+```
+
+getStaticLocations方法中，对这四个静态资源位置进行了扩充
+
+```java
+static String[] getResourceLocations(String[] staticLocations) {
+    String[] locations = new String[staticLocations.length + WebMvcAutoConfiguration.SERVLET_LOCATIONS.length];
+    System.arraycopy(staticLocations, 0, locations, 0, staticLocations.length);
+    System.arraycopy(WebMvcAutoConfiguration.SERVLET_LOCATIONS, 0, locations, staticLocations.length, WebMvcAutoConfiguration.SERVLET_LOCATIONS.length);
+    return locations;
+}
+```
+
+其中SERVLET_LOCATIONS = new String[]{"/"};
+
+可以看到，Spring Boot 默认会过滤所有的静态资源，而静态资源的位置一共有5个
+
+分别是：
+
+* classpath:/META-INF/resources/
+* classpath:/resources/
+* classpath:/static/
+* classpath:/public/
+* /
+
+也就是说，可以将静态资源放到这5个位置中的任意一个。注意，按照定义的顺序，5个静态资源位置的优先级依次降低，但是一般情况下，Spring Boot 不需要*webapp*目录，所以第五个`/`可以暂不考虑；
+
+在一个新创建的Spring Boot项目中，添加了*spring-boot-starter-web*依赖之后，在*resources*目录下分别创建四个目录，四个目录中放入同名的静态资源；
