@@ -1087,9 +1087,9 @@ public class MyWebMvcConfig implements WebMvcConfigurer {
 
 ```java
 String staticPathPattern = this.mvcProperties.getStaticPathPattern();
-                if (!registry.hasMappingForPattern(staticPathPattern)) {
-                    this.customizeResourceHandlerRegistration(registry.addResourceHandler(new String[]{staticPathPattern}).addResourceLocations(getResourceLocations(this.resourceProperties.getStaticLocations())).setCachePeriod(this.getSeconds(cachePeriod)).setCacheControl(cacheControl));
-                }
+       if (!registry.hasMappingForPattern(staticPathPattern)) {
+       this.customizeResourceHandlerRegistration(registry.addResourceHandler(new String[]{staticPathPattern}).addResourceLocations(getResourceLocations(this.resourceProperties.getStaticLocations())).setCachePeriod(this.getSeconds(cachePeriod)).setCacheControl(cacheControl));
+}
 ```
 
 Spring Boot 在这里进行了默认静态资源过滤配置，其中*staticPathPattern*默认定义在*WebMvcProperties*中，定义内容如下：
@@ -1130,3 +1130,165 @@ static String[] getResourceLocations(String[] staticLocations) {
 也就是说，可以将静态资源放到这5个位置中的任意一个。注意，按照定义的顺序，5个静态资源位置的优先级依次降低，但是一般情况下，Spring Boot 不需要*webapp*目录，所以第五个`/`可以暂不考虑；
 
 在一个新创建的Spring Boot项目中，添加了*spring-boot-starter-web*依赖之后，在*resources*目录下分别创建四个目录，四个目录中放入同名的静态资源；
+
+![](../images/spring boot + vue/默认静态资源优先级.png)
+
+#### 4.2.2 自定义策略
+
+如果默认的静态资源过滤策略不能满足开发需求，也可以自定义静态资源过滤策略，自定义静态资源过滤策略有以下两种方式
+
+1. 在配置文件中定义
+
+在*application.properties*文件中直接定义过滤规则和静态资源位置
+
+```yaml
+spring:
+  resources:
+    static-locations: classpath:/static/
+  mvc:
+    static-path-pattern: /static/**
+```
+
+过滤规则为`/static/**`，静态资源位置为`classpath:/static/`
+
+2. Java编码定义
+
+实现*WebMvcConfigurer*接口，再重写该接口的*addResourceHandlers*方法
+
+```java
+@Override
+public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    registry.addResourceHandler("/pic/**")
+            .addResourceLocations("classpath:/photo/");
+}
+```
+
+### 4.3 文件上传
+
+Spring MVC对文件上传做了简化，在Spring Boot 中对此做了更进一步的简化，文件上传更为方便；
+
+Java中的文件上传一共涉及两个组件，一个是*CommonsMultipartResolver*另一个*StandardServletMultipartResolver*，其中*CommonsMultipartResolver*使用*commons-fileupload*来处理*multipart*请求，而*StandardServletMultipartResolver*则是基于*Servlet 3.0*来处理*multipart*请求的。
+
+因此，若使用*StandardServletMultipartResolver*，则不需要添加额外的*jar*包，*Tomcat 7.0*开始就支持*Servlet 3.0*了，而*Spring Boot 2.0.4* 内嵌的*Tomcat*为*Tomcat 8.5.32*，因此可以直接使用*StandardServletMultipartResolver*
+
+```java
+@Bean(
+    name = {"multipartResolver"}
+)
+@ConditionalOnMissingBean({MultipartResolver.class})
+public StandardServletMultipartResolver multipartResolver() {
+    StandardServletMultipartResolver multipartResolver = new StandardServletMultipartResolver();
+    multipartResolver.setResolveLazily(this.multipartProperties.isResolveLazily());
+    return multipartResolver;
+}
+```
+
+根据这里的配置可以看出，如果开发者如果没有提供*MultipartResolver*，那么默认采用的*MultipartResolver*就是*StandardServletMultipartResolver*。因此，在Spring Boot中上传文件甚至可以做到零配置；
+
+#### 4.3.1 单文件上传
+
+首先创建一个Spring Boot项目，并添加*spring-boot-starter-web*依赖
+
+然后在*resources*目录下的*static*目录中创建一个*upload.html*文件
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>upload</title>
+</head>
+<body>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+    <input type="file" name="uploadFile" value="请选择文件">
+    <input type="submit" value="上传">
+    </form>
+</body>
+</html>
+```
+
+这是一个很简单的文件上传页面，上传接口是*/upload*，注意请求方法是*POST*，enctype是*multipart/from-data*
+
+创建文件上传处理接口
+
+```java
+@RestController
+public class UploadController {
+    SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
+
+    @PostMapping("/upload")
+    public String upload(MultipartFile uploadFile, HttpServletRequest request) {
+        String realPath = request.getSession().getServletContext().getRealPath("/uploadFile/");
+        String format = sdf.format(new Date());
+        File folder = new File(realPath + format);
+        if (!folder.exists()) {
+            folder.mkdirs();
+        }
+        String oldName = uploadFile.getOriginalFilename();
+        String newName = UUID.randomUUID().toString() +
+                Objects.requireNonNull(oldName).substring(oldName.lastIndexOf("."), oldName.length());
+        try {
+            uploadFile.transferTo(new File(folder, newName));
+            return request.getScheme() + "://" + request.getServerName() + ":" +
+                    request.getServerPort() + "/uploadFile/" + format + "/" + newName;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return "上传失败！";
+    }
+}
+```
+
+上传完毕后，通过返回的路径可以直接访问图片；
+
+因为Spring Boot默认资源路径支持`/`，因此这里的图片可以直接访问到
+
+也可以对图片上传的细节进行配置
+
+```yaml
+spring:
+  servlet:
+    multipart:
+      enabled: true
+      file-size-threshold: 0
+      location: /home/kay/file
+      max-file-size: 1MB
+      max-request-size: 10MB
+      resolve-lazily: false
+```
+
+* 是否开启文件上传支持，默认为true
+* 文件写入磁盘的阈值，默认为0
+* 上传文件的临时保存位置
+* 单个文件上传大小限制，默认为1MB
+* 多个文件上传的总大小，默认为10MB
+* 文件是否延迟解析，默认为false
+
+#### 4.3.2 多文件上传
+
+多文件上传与单文件上传基本一致，首先修改HTML文件
+
+```html
+...
+<input type="file" name="uploadFiles" value="请选择文件" multiple>
+...
+```
+
+修改控制器
+
+```java
+@PostMapping("/uploads")
+public String uploads(MultipartFile[] uploadFiles, HttpServletRequest request) {
+    for (MultipartFile uploadFile : uploadFiles) {
+    ...
+    }
+    ...
+}
+```
+
+### 4.4 @ControllerAdvice
+
+顾名思义，@ControllerAdvice就是@Controller的增强版，@ControllerAdvice主要用来处理全局数据，一般搭配@ExceptionHandler、@ModeAttribute以及@InitBinder使用
+
+#### 4.4.1 全局异常处理
+
