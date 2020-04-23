@@ -1292,3 +1292,29 @@ public String uploads(MultipartFile[] uploadFiles, HttpServletRequest request) {
 
 #### 4.4.1 全局异常处理
 
+@ControllerAdvice最常见的使用场景就是全局异常处理，在4.3节介绍了文件上传大小的限制，如果用户上传的文件超过了限制大小，就会抛出异常，此时可以通过@ControllerAdvice结合@ExceptionHandler定义全局异常捕获机制
+
+```java
+@ControllerAdvice
+public class CustomExceptionHandler {
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public void uploadException(MaxUploadSizeExceededException e, HttpServletResponse response) throws Exception{
+        response.setContentType("text/html; charset=UTF-8");
+        PrintWriter out = response.getWriter();
+        out.write("上传文件大小超出限制");
+        out.flush();
+        out.close();
+    }
+}
+```
+
+只需在系统中定义*CustomExceptionHandler*类，然后添加到*@ControllerAdvice*注解即可。当系统启动时，该类就会被扫描到Spring容器中，然后定义*uploadException*方法，在该方法上添加了@ExceptionHandler注解，其中定义的*MaxUploadSizeExceededException.class*表明该方法用来处理这个类型的异常，如果想该方法处理所有类型的异常，只需要将*MaxUploadSizeExceededException.class*改成*Exception.class*即可。
+
+方法的参数可以有异常实例、HTTPServletResponse以及HttpServletRequest、Model等，返回值可以是一段JSON、一个ModelAndView、一个逻辑视图名等
+
+如果返回参数是一个*ModelAndView*，假设使用的页面模板为*Thymeleaf*
+
+```
+
+```
+
