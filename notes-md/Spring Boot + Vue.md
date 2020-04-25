@@ -1314,7 +1314,365 @@ public class CustomExceptionHandler {
 
 如果返回参数是一个*ModelAndView*，假设使用的页面模板为*Thymeleaf*
 
+Thymeleaf配置
+
+```yaml
+spring:
+  thymeleaf:
+    suffix: .html
+    check-template-location: true
+    prefix: classpath:/templates/
+    encoding: UTF-8
+    enabled: true
+    cache: false
 ```
 
+CustomExceptionHandler
+
+```java
+@ControllerAdvice
+public class CustomExceptionHandler {
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ModelAndView uploadException(MaxUploadSizeExceededException e, HttpServletResponse response) throws IOException {
+        ModelAndView view = new ModelAndView();
+        view.setViewName("error");
+        view.addObject("msg", "上传文件大小超出限制！");
+        return view;
+    }
+}
+```
+
+Thymeleaf模板
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>upload error</title>
+</head>
+<body>
+    <h1 th:text = "${msg}"></h1>
+</body>
+</html>
+```
+
+最后效果
+
+![](../images/spring boot + vue/自定义全局异常处理类返回Thymeleaf视图效果.png)
+
+#### 4.4.2 添加全局数据
+
+@ControllerAdvice是一个全局数据处理组件。因此，也可以在@ControllerAdvice中配置全局数据，使用@ModelAttribute注解进行配置
+
+```java
+@ControllerAdvice
+public class GlobalConfig {
+    @ModelAttribute(value = "info")
+    public Map<String, String> userInfo() {
+        HashMap<String, String> userInfo = new HashMap<>();
+        userInfo.put("userName", "罗贯中");
+        userInfo.put("gender", "男");
+        return userInfo;
+    }
+}
+```
+
+* 在全局配置中添加userInfo方法，返回一个map，该方法有一个注解@ModelAttribute，其中的value属性表示这条返回数据的key，而方法的返回值是返回数据的value。
+* 此时在任意请求的Controller中，通过方法参数中的Model都可以获取info的数据
+
+Controller示例代码如下
+
+```java
+@RestController
+public class HelloController {
+
+    @GetMapping("hello")
+    public ModelAndView hello(Model model) {
+        Map<String, Object> map = model.asMap();
+        Set<String> keySet = map.keySet();
+        Iterator<String> iterator = keySet.iterator();
+        while (iterator.hasNext()) {
+            String key = iterator.next();
+            Object value = map.get(key);
+            System.out.println(key + " >>>>> " + value);
+        }
+        ModelAndView modelAndView = new ModelAndView();
+        modelAndView.addAllObjects(map);
+        modelAndView.setViewName("hello");
+        return modelAndView;
+    }
+}
+```
+
+Thymeleaf模板
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>Hello</title>
+</head>
+<body>
+    <h1>hello!</h1>
+    <div th:text="${info.userName}"></div>
+    <div th:text="${info.gender}"></div>
+</body>
+</html>
+```
+
+#### 4.4.3 请求参数预处理
+
+@ControllerAdvice结合@InitBinder还能实现请求参数预处理，即将表单中的数据绑定到实体类上时进行一些额外处理。
+
+例如有两个实体类Book和Author
+
+```java
+@Data
+public class Author {
+    private String name;
+    private int age;
+}
+@Data
+public class Book {
+    private String name;
+    private String author;
+}
+```
+
+在Controller上需要接收两个实体类的数据，Controller中的方法定义如下
+
+```java
+@RestController
+public class BookController {
+    @GetMapping("book")
+    public ModelAndView book(Book book, Author author) {
+        System.out.println(book.toString() + " >>>>> " + author.toString());
+        ModelAndView view = new ModelAndView();
+        view.addObject(book);
+        view.addObject(author);
+        view.setViewName("book");
+        return view;
+    }
+}
+```
+
+此时参数传递时，两个实体中的`name`属性会混淆，@ControllerAdvice结合@InitBinder可以顺利解决该问题
+
+首先给Controller中方法的参数添加@ModelAttribute注解
+
+```
+@RestController
+public class BookController {
+    @GetMapping("book")
+    public ModelAndView book(@ModelAttribute("a") Book book, @ModelAttribute("b") Author author) {
+        System.out.println(book.toString() + " >>>>> " + author.toString());
+        ModelAndView view = new ModelAndView();
+        view.addObject(book);
+        view.addObject(author);
+        view.setViewName("book");
+        return view;
+    }
+}
+```
+
+然后配置@ControllerAdvice
+
+```java
+@ControllerAdvice
+	// ...
+    @InitBinder("a")
+    public void init(WebDataBinder binder) {
+        binder.setFieldDefaultPrefix("a.");
+    }
+
+    @InitBinder("b")
+    public void init2(WebDataBinder binder) {
+        binder.setFieldDefaultPrefix("b.");
+    }
+```
+
+* 创建两个方法，第一个 `@InitBinder("a")`表示该方法是处理 `@ModelAttribute("a")`对应的参数的，第二个 `@InitBinder("b")`处理 `@ModelAttribute("b")`对应的参数
+* 在每个方法中给相应的 `Field`设置一个前缀，然后在浏览器中请求 book?a.author=罗贯中&a.name=三国演义&b.name=dk&b.age=22 即可成功的区分出`name`属性
+* 在*WebDataDinder*对象中，还可以设置允许的字段、禁止的字段、必填的字段以及验证器等。
+
+### 4.5 自定义错误页
+
+上一节中介绍了*Spring Boot*中的全局异常处理，在处理异常时，开发者可以根据实际情况，返回不同的页面，但是这种异常处理方式一般用来处理应用级别的异常。有一些容器级别的错误就处理不了，例如*Filter*中抛出异常，使用@ControllerAdvice定义的全局异常处理机制就无法处理。
+
+因此，Spring Boot中，默认情况下，如果用户在发起请求时发生了404/500错误，Spring Boot会有一个默认的页面展示给用户。
+
+事实上，Spring Boot在返回错误信息时不一定返回HTML页面，而是根据实际情况返回HTML页面或者一段JSON，若开发者发起Ajax请求，则错误信息是一段JSON。对于开发者而言，这一段HTML或者JSON都可以自由定制。
+
+Spring Boot中的错误默认是由*BasicErrorController*类来处理的，该类中的核心方法主要有两个：
+
+```java
+    @RequestMapping(
+        produces = {"text/html"}
+    )
+    public ModelAndView errorHtml(HttpServletRequest request, HttpServletResponse response) {
+        HttpStatus status = this.getStatus(request);
+        Map<String, Object> model = Collections.unmodifiableMap(this.getErrorAttributes(request, this.isIncludeStackTrace(request, MediaType.TEXT_HTML)));
+        response.setStatus(status.value());
+        ModelAndView modelAndView = this.resolveErrorView(request, response, status, model);
+        return modelAndView != null ? modelAndView : new ModelAndView("error", model);
+    }
+
+    @RequestMapping
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> error(HttpServletRequest request) {
+        Map<String, Object> body = this.getErrorAttributes(request, this.isIncludeStackTrace(request, MediaType.ALL));
+        HttpStatus status = this.getStatus(request);
+        return new ResponseEntity(body, status);
+    }
+```
+
+其中，erroHtml方法用来返回HTML页面，error用来返回错误JSON，具体返回的是HTML还是JSON则要看请求头的Accept参数。返回JSON的逻辑很简单，不必过多介绍，返回HTML的逻辑稍微有点复杂，在errorHtml中，通过调用*resolveErrorView*方法来获取一个错误视图的*ModelAndView*。而*resolveErrorView*方法的调用最终会来到*DefaultErrorViewResovler*类中。
+
+DefaultErrorViewResolver类是Spring Boot中默认的错误信息视图解析器
+
+```java
+    // ..
+	static {
+        Map<Series, String> views = new EnumMap(Series.class);
+        views.put(Series.CLIENT_ERROR, "4xx");
+        views.put(Series.SERVER_ERROR, "5xx");
+        SERIES_VIEWS = Collections.unmodifiableMap(views);
+    }
+	// ..
+    private ModelAndView resolve(String viewName, Map<String, Object> model) {
+        String errorViewName = "error/" + viewName;
+        TemplateAvailabilityProvider provider = this.templateAvailabilityProviders.getProvider(errorViewName, this.applicationContext);
+        return provider != null ? new ModelAndView(errorViewName, model) : this.resolveResource(errorViewName, model);
+    }
+	// ..
+```
+
+从这一段源码中可以看到，Spring Boot默认是在error目录下查找4xx、5xx的文件作为错误视图，当找不到时会回到errorHtml方法中，然后使用error作为默认的错误页面视图名，如果名为error的视图也找不到，用户就会看到默认的错误提示页。
+
+#### 4.5.1 简单配置
+
+通过上述的介绍，自定义错误页其实很简单，提供4xx和5xx页面即可。如果开发者不需要向用户展示详细的错误信息，那么可以把错误信息定义成静态页面，直接在*resources/static*目录下创建error目录，然后在error目录中创建错误展示页面。错误展示页面的命名规则有两种：一种是4xx.html、5xx.html；另一种是直接使用响应码命名文件，例如404.html、405.html、500.html。第二种命名方式划分得更细，当出错时，不同的错误会展示不同的错误页面。
+
+![](../images/spring boot + vue/自定义静态错误页.png)
+
+访问错误的路径，效果如下：
+
+![](../images/spring boot + vue/Custom404.png)
+
+修改Contoller，提供一个会抛异常的请求；
+
+```java
+@GetMapping("500")
+public String error500() {
+    int i = 1 / 0;
+    return "error500";
+}
+```
+
+访问后，会展示500.html的内容；
+
+![](../images/spring boot + vue/Custom500.png)
+
+这种定义都是使用了静态HTML页面，无法向用户展示完整的错误信息，若采用视图模块技术，则可以向用户展示更多的错误信息，如果使用HTML模板，那么先引入模板相关的依赖，这里以Thymeleaf为例，Thymeleaf页面模板默认处于*classpath:/templates/*目录下，因此在该目录下先创建*error*目录，再创建错误展示页
+
+![](../images/spring boot + vue/模板错误页.png)
+
+页面代码如下
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${status}"></title>
+</head>
+<body>
+    <div th:text="${timestamp}"></div>
+    <div th:text="${status}"></div>
+    <div th:text="${error}"></div>
+    <div th:text="${message}"></div>
+    <div th:text="${path}"></div>
+</body>
+</html>
+```
+
+Spring Boot在这里一共返回了5条错误相关的信息，分别是`timestamp`、`status`、`error`、`message`、`path`。5xx.html页面的内容与4xx.html页面的内容一致。
+
+此时，用户访问一个不存在的地址，4xx.html页面中的内容将被展示出来
+
+![](../images/spring boot + vue/4xx模板页面.png)
+
+访问一个会抛异常的地址
+
+![](../images/spring boot + vue/5xx模板页面.png)
+
+> 若用户定义了多个错误页面，则响应码.html页面的优先级高于4xx.html、5xx.html页面的优先级，即若当前是一个404错误，则优先展示404.html而不是4xx.html；动态页面的优先级高于静态页面，即若resources/templates和resources/static下同时定义了4xx.html，则优先展示resources/templates/4xx.html
+
+#### 4.5.2 复杂配置
+
+上面这种配置还不够灵活，只能定义HTML页面，无法处理JSON的定制，Spring Boot中支持对Error信息的深度定制，接下来将从三个方面介绍深度定制：**自定义Error数据**、**自定义Error视图**以及**完全自定义**
+
+1. 自定义Error数据
+
+自定义Error数据就是对返回的数据进行自定义。Spring Boot返回的Error信息一共有5条，分别是`timestamp`、`status`、`error`、`message`以及`path`。在*BasicErrorController*的errorHtml的方法和error方法中，都是通过*getErrorAttributes*方法获取*Error*信息的。该方法最终会调用到*DefaultErrorAttributes*类的*getErrorAttributes*方法，而*DefaultErrorAttributes*类是在*ErrorMvcAutoConfiguration*中默认提供的。*ErrorMvcAutoConfiguration*类的*errorAttributes*方法源码如下：
+
+```java
+@Bean
+@ConditionalOnMissingBean(
+value = {ErrorAttributes.class},
+search = SearchStrategy.CURRENT
+)
+public DefaultErrorAttributes errorAttributes() {
+return new DefaultErrorAttributes(this.serverProperties.getError().isIncludeException());
+}
+```
+
+从这段源码中可以看出，当系统没有提供ErrorAttributes时才会采用*DefaultErrorAttributes*。
+
+因此，自定义错误提示时，只需要自己提供一个*ErrorAttributes*即可，而*DefaultErrorAttributes*是*ErrorAttributes*的子类，因此只需要继承*DefaultErrorAttributes*即可
+
+```java
+@Component
+public class MyErrorAttribute extends DefaultErrorAttributes {
+    @Override
+    public Map<String, Object> getErrorAttributes(WebRequest webRequest, boolean includeStackTrace) {
+        Map<String, Object> errorAttributes = super.getErrorAttributes(webRequest, includeStackTrace);
+        errorAttributes.put("customMsg", "出错啦！");
+        errorAttributes.remove("error");
+        return errorAttributes;
+    }
+}
+```
+
+* 自定义MyErrorAttribute继承自DefaultErrorAttributes，重写DefaultErrorAttributes中的getErrorAttributes方法，MyErrorAttribute添加@Componet注解，该类将被注册到Spring容器中
+* 通过super.getErrorAttributes(webRequest, includeStackTrace);获取Spring Boot默认提供的错误信息，然后在此基础上添加Error信息或移除Error信息
+
+此时，当系统抛出异常时，错误信息将被修改，修改4xx.html模板
+
+```html
+..
+<div th:text="${customMsg}"></div>
+..
+```
+
+![](../images/spring boot + vue/新增customMsg错误信息字段.png)
+
+使用PostMan查看返回的JSON错误信息
+
+![](../images/spring boot + vue/postman查看错误JSON.png)
+
+2. 自定义Error视图
+
+Error视图是展示给用户的页面，在*BasicErrorController*的errorHtml方法中调用*resolveErrorView*方法获取一个*ModelAndView*实例。resolveErrorView方法是由ErrorViewResolver提供的，通过ErrorMvcAutoConfiguration类的源码可以看到Spring Boot默认采用的ErrorViewResolver是DefaultErrorViewResolver。
+
+```java
+@Bean
+@ConditionalOnBean({DispatcherServlet.class})
+@ConditionalOnMissingBean
+public DefaultErrorViewResolver conventionErrorViewResolver() {
+return new DefaultErrorViewResolver(this.applicationContext, this.resourceProperties);
+}
 ```
 
