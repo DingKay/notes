@@ -1462,7 +1462,7 @@ public class BookController {
 
 首先给Controller中方法的参数添加@ModelAttribute注解
 
-```
+```java
 @RestController
 public class BookController {
     @GetMapping("book")
@@ -1674,5 +1674,60 @@ Error视图是展示给用户的页面，在*BasicErrorController*的errorHtml�
 public DefaultErrorViewResolver conventionErrorViewResolver() {
 return new DefaultErrorViewResolver(this.applicationContext, this.resourceProperties);
 }
+```
+
+从这段源码可以看出，如果没有定义ErrorViewResolver，那么默认使用的ErrorViewResolver是DefaultErrorViewResolver，正是在DefaultErrorViewResolver中配置了默认去error目录下寻找4xx.html、5xx.html。因此，开发者想要自定义Error视图，只需要提供自己的ErrorViewResolver即可
+
+```java
+@Component
+public class MyErrorViewResolver implements ErrorViewResolver {
+    @Override
+    public ModelAndView resolveErrorView(HttpServletRequest request, HttpStatus status, Map<String, Object> model) {
+        ModelAndView modelAndView = new ModelAndView("errorPage");
+        modelAndView.addAllObjects(model);
+        return modelAndView;
+    }
+}
+```
+
+* 自定义MyErrorViewResolver实现ErrorViewResolver接口并实现接口中的resolveErrorView方法，使用@Component注解将该类注册到Spring容器中
+* 在resolveErrorView方法中，最后一个Map参数就是Spring Boot提供的默认5条Error信息（可以按照自定义Error数据的步骤对这5条消息进行修改），在resolveErrorView方法中，返回一个ModelAndView，在其中设置Error视图和Error数据
+* 理论上，开发者也可以通过实现ErrorViewResolver接口来实现Error数据的自定义，但是如果只是单纯的想自定义Error数据，还是建议继承DefaultErrorAttribute
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>ErrorPage</title>
+</head>
+<body>
+    <h1 th:text="${customMsg}"></h1>
+    <h1 th:text="${timestamp}"></h1>
+    <h1 th:text="${status}"></h1>
+    <h1 th:text="${error}"></h1>
+    <h1 th:text="${message}"></h1>
+    <h1 th:text="${path}"></h1>
+</body>
+</html>
+```
+
+在errorPage中，除了展示Spring Boot提供的5条Error信息外，也展示了自定义Error信息，此时，无论请求发生4xx、5xx错误，都会来到errorPage页面
+
+3. 完全自定义
+
+前面提到的两种自定义方式都是对BasicErrorController类中的某个环节进行修补。查看Error自动化配置类*ErrorMvcAutoConfiguration*，可以发现BasicErrorController本身只是一个默认的配置
+
+```java
+// ...
+@Bean
+@ConditionalOnMissingBean(
+value = {ErrorController.class},
+search = SearchStrategy.CURRENT
+)
+public BasicErrorController basicErrorController(ErrorAttributes errorAttributes) {
+return new BasicErrorController(errorAttributes, this.serverProperties.getError(), this.errorViewResolvers);
+}
+// ...
 ```
 
