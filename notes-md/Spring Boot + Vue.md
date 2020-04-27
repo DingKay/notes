@@ -1731,3 +1731,90 @@ return new BasicErrorController(errorAttributes, this.serverProperties.getError(
 // ...
 ```
 
+如果需要更加灵活的对Error视图和数据进行处理，提供自己的ErrorController即可。提供自己的ErrorController有两种方式：
+
+一种是实现ErrorController接口，另一种是直接继承BasicErrorController。由于ErrorController接口只提供待实现的方法，而BasicErrorController已经实现了很多功能，因此这里选择第二种方法；
+
+```java
+@Controller
+public class MyErrorController extends BasicErrorController {
+
+    @Autowired
+    public MyErrorController(ErrorAttributes errorAttributes, ServerProperties serverProperties, List<ErrorViewResolver>
+            errorViewResolvers) {
+        super(errorAttributes, serverProperties.getError(), errorViewResolvers);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> error(HttpServletRequest request) {
+        Map<String, Object> errorAttributes = getErrorAttributes(request, isIncludeStackTrace(request, MediaType.ALL));
+        errorAttributes.put("error", "出错啦！");
+        HttpStatus status = getStatus(request);
+        return new ResponseEntity<>(errorAttributes, status);
+    }
+
+    @Override
+    public ModelAndView errorHtml(HttpServletRequest request, HttpServletResponse response) {
+        HttpStatus status = getStatus(request);
+        Map<String, Object> errorAttributes = getErrorAttributes(request, isIncludeStackTrace(request, MediaType.ALL));
+        errorAttributes.put("customMsg", "出错啦！");
+        ModelAndView modelAndView = new ModelAndView("myErrorPage", errorAttributes, status);
+        return modelAndView;
+    }
+}
+```
+
+* z自定义MyErrorController继承自BasicErrorController并添加@Controller注解，将MyErrorController注册到Spring MVC容器中
+* 由于BasicErrorController没有无参构造方法，因此在创建BasicErrorController实例时需要传递参数，在MyErrorController的构造方法上添加@AutoWired注解注入所需参数
+* 参考BasicErrorController中的实现，重写error和errorHtml方法，对error的视图和数据进行充分的自定义
+
+### 4.6 CORS支持
+
+CORS（Cross-Origin Resource Sharing）是由W3C制定的一种跨域资源共享技术标准，其目的就是为了解决前端的跨域请求。在Java开发中，最常见的前端跨域请求解决方案是JSONP，但是JSONP只支持GET请求，这是一个很大的缺陷，而CORS则支持多种HTTP请求方法，以CORS中的*GET*请求为例，当浏览器发起请求时，请求头中携带了如下信息
+
+```
+...
+HOST:localhost:8080
+Origin:http://localhost:8081
+Referer:http://localhost:8081/index.html
+...
+```
+
+假如服务端支持CORS，则服务端给出的响应信息如下
+
+```
+...
+Access-Control-Allow-Origin:http://localhost:8081
+Content-Length:20
+Content-Type:text/plain;charset=UTF-8
+...
+```
+
+> 注意：响应头中有一个Access-Control-Allow-Origin字段，用来记录可以访问该资源的域。当浏览器收到这样的响应头信息后，提取出Access-Control-Allow-Origin字段中的值，发现该值包含当前页面所在的域，就知道这个跨域是被允许的，因此就不再对前端的跨域请求进行限制，这就是GET请求的整个跨域流程，在这个过程中，前端请求的代码不需要修改，主要是后端进行处理，这个流程主要是针对GET、POST以及HEAD请求，并且没有自定义请求头，如果用户发起一个DELETE请求、PUT请求或者自定义了请求头，流程就会稍微发杂一些。
+
+以DELETE请求为例，当前端发起一个DELETE请求时，这个请求的处理会经过两个步骤。
+
+第一步，发送一个OPTIONS请求
+
+```
+...
+Access-Control-Request-Method DELETE
+Connection keep-alive
+Host localhost:8080
+Origin http://localhost:8081
+...
+```
+
+这个请求将向服务端询问是否具备该资源的DELETE权限，服务端会给浏览器一个响应
+
+```
+...
+HTTP/1.1 200
+Access-Control-Allow-Origin: http://localhost:8081
+Access-Control-Allow-Methods: DELETE
+Access-Control-Max-Age: 1800
+Allow: GET, HEAD, POST, PUT, DELETE, OPTIONS, PATCH
+Content-Length: 0
+...
+```
+
