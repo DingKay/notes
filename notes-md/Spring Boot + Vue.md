@@ -4,9 +4,9 @@
 
 **Spring Boot 主要有如下优势**：
 
-提供一个快速的Spring 项目搭建渠道
+提供一个快速的 Spring 项目搭建渠道
 
-开箱即用，很少的Spring配置就能运行一个Java EE项目
+开箱即用，很少的 Spring 配置就能运行一个Java EE项目
 
 提供了生产级的服务监控方案
 
@@ -22,7 +22,7 @@
 
 本地（win10）安装Maven，并将`bin`目录添加至`path`环境变量
 
-```dos
+```powershell
 mvn archetype:generate -DgroupId=com.dk -DartifactId=chapter01 -DarchetypeArtifactId=maven-archetype-quickstart -DinteractiveMode=false
 ```
 
@@ -92,7 +92,6 @@ public class App {
 ```java
 @RestController
 public class HelloController {
-
     @GetMapping("hi")
     public String hello() {
         return "Hello, Spring Boot!";
@@ -346,31 +345,31 @@ server.ssl.key-store-password=980217
 配置请求重定向
 
 ```java
-    @Bean
-    public TomcatServletWebServerFactory webServerFactory() {
-        TomcatServletWebServerFactory webServerFactory = new TomcatServletWebServerFactory() {
-            @Override
-            protected void postProcessContext(Context context) {
-                SecurityConstraint constraint = new SecurityConstraint();
-                constraint.setUserConstraint("CONFIDENTIAL");
-                SecurityCollection collection = new SecurityCollection();
-                collection.addPattern("/*");
-                constraint.addCollection(collection);
-                context.addConstraint(constraint);
-            }
-        };
-        webServerFactory.addAdditionalTomcatConnectors(createTomcatConnector());
-        return webServerFactory;
-    }
+@Bean
+public TomcatServletWebServerFactory webServerFactory() {
+    TomcatServletWebServerFactory webServerFactory = new TomcatServletWebServerFactory() {
+        @Override
+        protected void postProcessContext(Context context) {
+            SecurityConstraint constraint = new SecurityConstraint();
+            constraint.setUserConstraint("CONFIDENTIAL");
+            SecurityCollection collection = new SecurityCollection();
+            collection.addPattern("/*");
+            constraint.addCollection(collection);
+            context.addConstraint(constraint);
+        }
+    };
+    webServerFactory.addAdditionalTomcatConnectors(createTomcatConnector());
+    return webServerFactory;
+}
 
-    private Connector createTomcatConnector() {
-        Connector connector = new Connector("org.apache.coyote.http11.Http11NioProtocol");
-        connector.setScheme("http");
-        connector.setPort(80);
-        connector.setSecure(false);
-        connector.setRedirectPort(8080);
-        return connector;
-    }
+private Connector createTomcatConnector() {
+    Connector connector = new Connector("org.apache.coyote.http11.Http11NioProtocol");
+    connector.setScheme("http");
+    connector.setPort(80);
+    connector.setSecure(false);
+    connector.setRedirectPort(8080);
+    return connector;
+}
 ```
 
 再次使用*HTTP*访问则可以重定向至*HTTPS*
@@ -484,7 +483,7 @@ public class Book {
 
 #### 2.7.1 常规配置
 
-*YAML*是*JSON*的超集，简洁而强大。是一种专门用来书写配置文件的语言，可以替代*application.properties*，在创建一个*Spring Boot*项目时，引入的*spring-boot-starter-web*依赖间接的引入了*snakeyaml*依赖，*snakeyaml*会实现对*YAML*配置的解析，利用缩进表示层级关系，并且大小写敏感。
+*YAML*是*JSON*的超集，简洁而强大。是一种专门用来书写配置文件的语言，可以替代*application.properties*，在创建一个*Spring Boot*项目时，引入的*spring-boot-starter-web*依赖间接的引入了*snakeyaml*依赖，*snakeyaml*会实现对*YAML*配置的解析，利用缩进表示层级关系，并且**大小写敏感**。
 
 ```yaml
 server:
@@ -1817,4 +1816,534 @@ Allow: GET, HEAD, POST, PUT, DELETE, OPTIONS, PATCH
 Content-Length: 0
 ...
 ```
+
+至此一个跨域的DELETE请求完成。
+
+无论是简单请求，还是需要先进行探测的请求，前端的写法都是不变的，额外的处理都是在服务端来完成的。在传统的Java EE开发中，可以通过过滤器统一配置，而Spring Boot中对此则提供了更加简洁的解决方案。
+
+1. 创建Spring Boot工程，添加依赖
+2. 创建Controller
+
+```java
+@PostMapping("book")
+public String addBook(String name) {
+return "receive:" + name;
+}
+
+@DeleteMapping("/{id}")
+public String deleteBookById(@PathVariable Long id) {
+return String.valueOf(id);
+}
+```
+
+3. 配置跨域
+
+跨域有两个地方跨域配置，一个是直接在相应的请求方法上加注解：
+
+```java
+@PostMapping("book")
+@CrossOrigin(value = "http://localhost:8081", maxAge = 1800, allowedHeaders = "*")
+public String addBook(String name) {
+return "receive:" + name;
+}
+
+@DeleteMapping("/{id}")
+@CrossOrigin(value = "http://localhost:8081", maxAge = 1800, allowedHeaders = "*")
+public String deleteBookById(@PathVariable Long id) {
+return String.valueOf(id);
+}
+```
+
+代码解释：
+
+* @CrossOrigin中的value表示支持的域，这里表示支持localhost:8081域的请求是支持跨域的
+* maxAge表示探测请求的有效期，DELETE、PUT请求或者自定义头请求，在执行过程中会先发送探测请求，探测请求不用每次都发送，可以配置一个有效期，有效期过了之后才会发送探测请求，这个属性默认是1800秒，即30分钟。
+* allowedHeaders表示允许的请求头，*表示允许所有的请求头
+
+这种配置方式是一种细粒度的配置，可以控制到每一个方法上，当然，也可以不在每个方法上面加@CrossOrigin注解，而是采用一种全局配置
+
+```java
+@Configuration
+public class MyWebMvcConfig implements WebMvcConfigurer {
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/*")
+                .allowedHeaders("*")
+                .allowedMethods("*")
+                .maxAge(1800)
+                .allowedOrigins("http://localhost:8081");
+    }
+}
+
+```
+
+代码解释：
+
+* 全局配置需要自定义类实现WebMvcConfigurer接口，然后实现接口中的 addCorsMappings 方法。
+* 在 addCorsMappings 方法中，addMapping表示对哪种格式的请求路径进行跨域处理；allowedHeaders表示允许的请求头，默认允许所有的请求头信息；allowedMethods表示允许的请求方法，默认是GET、POST和HEAD；*表示支持所有的请求方法；maxAge表示探测请求有效期；allowedOrigins表示支持的域；
+
+以上两种配置任选其一即可。
+
+4. 测试
+
+新建一个项目，创建一个index.html文件
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="js/jquery.min.js"></script>
+</head>
+<body>
+    <div id="contentDiv"></div>
+    <div id="deleteResult"></div>
+    <input type="button" value="提交数据" onclick="getData()"/> <br/>
+    <input type="button" value="删除数据" onclick="deleteData()"/> <br/>
+    <script>
+        function deleteData() {
+            $.ajax({
+                url: 'http://localhost:8080/99',
+                type: 'delete',
+                success:function (msg) {
+                    $("#deleteResult").html(msg);
+                }
+            })
+        }
+        function getData() {
+            $.ajax({
+                url: 'http://localhost:8080/book/',
+                type: 'post',
+                data: {name:'三国演义'},
+                success:function (msg) {
+                    $("#contentDiv").html(msg);
+                }
+            })
+        }
+    </script>
+</body>
+</html>
+```
+
+两个普通的Ajax都发送了一个跨域请求
+
+将项目的端口修改为8081
+
+```properties
+server.port=8081
+```
+
+启动项目，点击两个按钮
+
+![](../images/spring boot + vue/页面按钮发送请求cors.png)
+
+### 4.7 配置类与XML配置
+
+Spring Boot推荐使用Java来完成相关的配置工作，在项目中，不建议将所有的配置都放在一个配置类中，可以根据不同的需求提供不同的配置类，例如专门处理Spring Security的配置类、提供Bean的配置类、Spring MVC的相关配置类。这些配置类上都需要添加@Configuration注解，@ComponentScan注解会扫描所有的Spring组件，也包括@Configuration。
+
+Spring Boot中不推荐使用XML配置，尽量使用Java配置代替XML配置，如果需要使用XML配置，只需要在resources目录下提供XML配置文件，然后通过@ImportResource加载配置文件，例如有个Hello类如下
+
+```java
+public class Hello {
+    public String sayHello(String name) {
+        return "hello " + name;
+    }
+}
+
+```
+
+添加一个beans.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <beans>
+        <bean class="com.dk.bean.Hello" id="hello"></bean>
+    </beans>
+</beans>
+```
+
+创建配置类BeansConfig
+
+```java
+@Configuration
+@ImportResource("classpath:beans.xml")
+public class BeansConfig {
+}
+
+```
+
+在Controller中使用
+
+```java
+@Autowired
+Hello hello;
+@GetMapping("bean")
+public String bean() {
+return hello.sayHello("xdk");
+}
+```
+
+### 4.8 注册拦截器
+
+Spring MVC中提供了AOP风格的拦截器，拥有更加精细的拦截处理能力，Spring Boot中拦截器的注册更加方便
+
+1. 创建Spring Boot项目，添加web依赖；
+2. 创建自定义拦截器实现HandlerInterceptor接口
+
+```java
+public class MyInterceptor implements HandlerInterceptor {
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        System.out.println("MyInterceptor >> preHandle");
+        return true;
+    }
+
+    @Override
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
+        System.out.println("MyInterceptor >> postHandle");
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+        System.out.println("MyInterceptor >> afterCompletion");
+    }
+}
+```
+
+拦截器中的方法将按照 preHandle -> Controller -> postHandle -> afterCompletion的顺序执行。注意，只有preHandle方法返回true时后面的方法才会执行。当拦截器链内存在多个拦截器时，postHandle在拦截器链内的所有拦截器返回成功时才会调用，而afterCompletion只有preHandle返回true才调用，但若拦截器链内的第一个拦截器的preHandle方法返回false，则后面的方法都不会执行。
+
+3. 配置拦截器，定义配置类进行拦截器的配置
+
+```java
+@Configuration
+public class MyWebMvcConfig implements WebMvcConfigurer {
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new MyInterceptor())
+                .addPathPatterns("/**")
+                .excludePathPatterns("/hello");
+    }
+}
+```
+
+自定义实现WebMvcConfigurer接口，实现接口中的 addInterceptor方法，其中，addPathPatterns表示拦截器路径，excludePathPatterns表示排除的路径
+
+4. 测试，浏览器中访问Controller，打印日志；
+
+```
+MyInterceptor >> preHandle
+MyInterceptor >> postHandle
+MyInterceptor >> afterCompletion
+```
+
+### 4.9 启动系统任务
+
+有一些特殊的任务需要在系统启动时执行，例如配置文件加载，数据库初始化等操作，如果没有使用Spring Boot，这些问题可以在Listener中解决。Spring Boot对此提供了两种解决方案： **CommandLineRunner**和 **ApplicationRunner**。两者差异主要体现在参数上不同
+
+#### 4.9.1 CommandLineRunner
+
+Spring Boot项目启动时会遍历所有 **CommandLineRunner**的实现类，并调用其中的run方法。如果整个系统中有多个实现类，那么可以用@Order注解对这些实现类的调用顺序进行排序。
+
+在一个Spring Boot Web项目中添加两个 **CommandLineRunner**
+
+```java
+@Component
+@Order(1)
+public static class CommandLineRunnerOne implements CommandLineRunner {
+@Override
+public void run(String... args) throws Exception {
+System.out.println("RunnerOne >> " + Arrays.toString(args));
+}
+}
+
+@Component
+@Order(2)
+public static class CommandLineRunnerTwo implements CommandLineRunner {
+@Override
+public void run(String... args) throws Exception {
+System.out.println("RunnerTwo >> " + Arrays.toString(args));
+}
+}
+```
+
+代码解释：
+
+* @Order注解用来描述CommandLineRunner的执行顺序，数字越小越先执行。
+* run方法中是调用的核心逻辑，参数是系统启动时传入的参数，即入口类中main方法的参数（在调用SpringApplication.run方法时被传入Spring Boot项目中）
+
+```
+RunnerOne >> main[小丁, 丁一]
+RunnerTwo >> main[小丁, 丁一]
+```
+
+#### 4.9.2 ApplicationRunner
+
+ApplicationRunner的用法和CommandLineRunner基本一致，区别主要体现在run方法的参数上
+
+```java
+@Component
+@Order(1)
+public static class ApplicationRunnerOne implements ApplicationRunner {
+    @Override
+    public void run(ApplicationArguments args) throws Exception {
+        List<String> nonOptionArgs = args.getNonOptionArgs();
+        System.out.println("ApplicationRunnerOne-nonOptionArgs = " + nonOptionArgs);
+        Set<String> optionNames = args.getOptionNames();
+        System.out.println("ApplicationRunnerOne-optionNames = " + optionNames);
+        for (String optionName : optionNames) {
+            System.out.println("ApplicationRunnerOne-key: " + optionName + "; value: " + args.getOptionValues(optionName));
+        }
+    }
+}
+
+@Component
+@Order(2)
+public static class ApplicationRunnerTwo implements ApplicationRunner {
+    @Override
+    public void run(ApplicationArguments args) throws Exception {
+        List<String> nonOptionArgs = args.getNonOptionArgs();
+        System.out.println("ApplicationRunnerTwo-nonOptionArgs = " + nonOptionArgs);
+        Set<String> optionNames = args.getOptionNames();
+        System.out.println("ApplicationRunnerTwo-optionNames = " + optionNames);
+        for (String optionName : optionNames) {
+            System.out.println("ApplicationRunnerTwo-key: " + optionName + "; value: " + args.getOptionValues(optionName));
+        }
+    }
+}
+```
+
+代码解释：
+
+* @Order注解用来描述CommandLineRunner的执行顺序，数字越小越先执行。
+* 不同于CommandLineRunner中run方法的String数组参数，这里run方法的参数是ApplicationArguments对象，如果想从ApplicationArguments对象中获取入口类中main方法接受的参数，调用getNonOptionArgs即可。ApplicationArguments中的getOptionNames方法用来获取项目启动命令行中参数的key，例如本项目打成jar包，运行 java -jar xxx.jar -name=Michael 命令来启动项目，此时getOptionNames方法获取到的就是name，而getOptionValues则是获取相应的value。
+
+```
+--name=Michael --age=99 小丁 丁一
+```
+
+命令解释：
+
+* --name=Michael --age=99都属于getOptionNames/getOptionValues范畴。
+* 后面的 **小丁**、**丁一**可以通过getNonOptionArgs方法获取，获取到的是一个数组，相当于上文提到的运行时配置的ProgramArgument
+
+output：
+
+```
+ApplicationRunnerOne-nonOptionArgs = [小丁, 丁一]
+ApplicationRunnerOne-optionNames = [name, age]
+ApplicationRunnerOne-key: name; value: [Michael]
+ApplicationRunnerOne-key: age; value: [99]
+ApplicationRunnerTwo-nonOptionArgs = [小丁, 丁一]
+ApplicationRunnerTwo-optionNames = [name, age]
+ApplicationRunnerTwo-key: name; value: [Michael]
+ApplicationRunnerTwo-key: age; value: [99]
+```
+
+### 4.10 整合Servlet、Filter和Listener
+
+一般情况下，使用Spring、Spring MVC这些框架后，基本上就告别了Servlet、Filter以及Listener了，但是有时在整合一些第三方框架时，可能还是不得不使用Servlet，比如在整合某报表插件时，就需要使用Servlet。Spring Boot中对于整合这些基本的Web组件也提供了很好的支持。
+
+在项目中添加如下三个组件：
+
+```java
+@WebFilter("/*")
+public static class MyFilter implements Filter {
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {
+        System.out.println("MyFilter >> init");
+    }
+
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+        System.out.println("MyFilter >> doFilter");
+        filterChain.doFilter(servletRequest, servletResponse);
+    }
+
+    @Override
+    public void destroy() {
+        System.out.println("MyFilter >> destroy");
+    }
+}
+
+@WebListener
+public static class MyListener implements ServletRequestListener {
+    @Override
+    public void requestDestroyed(ServletRequestEvent servletRequestEvent) {
+        System.out.println("MyListener >> requestDestroyed");
+    }
+
+    @Override
+    public void requestInitialized(ServletRequestEvent servletRequestEvent) {
+        System.out.println("MyListener >> requestInitialized");
+    }
+}
+
+@WebServlet("/my")
+public static class MyServlet extends HttpServlet {
+    private static final long serialVersionUID = 6477475829358344516L;
+
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        doPost(req, resp);
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        System.out.println("req.getParameter(\"name\") = " + req.getParameter("name"));
+    }
+}
+```
+
+代码解释：
+
+* 这里定义了三个基本组件，分别使用@WebServlet、@WebFilter 和@WebListener三个注解进行标记
+* 这里以ServletRequestListener为例，但是对于其他的Listener，例如HttpSessionListener、ServletContextListener等也是支持的。
+
+在项目入口类上添加@ServletComponentScan注解，实现对Servlet、Listener以及Filter的扫描
+
+最后启动项目，查看日志
+
+```
+MyFilter >> init
+...
+...
+MyListener >> requestInitialized
+MyFilter >> doFilter
+req.getParameter("name") = xdk
+MyListener >> requestDestroyed
+```
+
+### 4.11 路径映射
+
+一般情况下，使用了页面模板后，用户需要访问控制器才能访问页面，有一些页面需要在控制器中加载数据，然后渲染，才能显示出来；还有一些页面在控制器中不需要加载数据，只是完成简单的跳转，对于这类页面，配置路径映射，提高访问速度。
+
+例如有两个Thymeleaf模板页面login.html和index.html，直接在MVC配置中重写addViewControllers方法配置映射关系即可
+
+```java
+@Override
+public void addViewControllers(ViewControllerRegistry registry) {
+    registry.addViewController("/login").setViewName("login");
+    registry.addViewController("/index").setViewName("index");
+}
+```
+
+### 4.12 配置AOP
+
+#### 4.12.1 AOP简介
+
+要介绍面向切面编程（Aspect-Oriented Programming，AOP），需要考虑这样一个场景：公司有一个管理系统已经上线，但是运行不稳定，有时快有时慢，为了弄清哪个环节出了问题，开发人员想要监控每个方法的执行时间，再根据这些执行时间判断问题所在，当问题解决后，再把这些监控移除掉。系统目前已经运行，如果手动修改系统成千上万个方法，工作量太大，而且这套监控方法最后还是要移除掉。如果能够在系统中动态添加代码，就能很好的解决这个需求。在系统运行时动态添加代码的方式称为面向切面编程（AOP），在AOP中有一些常见的概念
+
+* Joinpoint（连接点）：类里面可以被增强的方法即为连接点。例如，想修改哪个方法的功能，那么该方法就是一个连接点。
+* Pointcut（切入点）：对Joinpoint进行拦截的定义即为切入点。例如，拦截所有以insert开始的方法，这个定义即为切入点。
+* Advice（通知）：拦截到Joinpoint之后所要做的事情就是通知。例如，上文说到的监控，通知分为前置通知、后置通知、环绕通知、异常通知和最终通知。
+* Aspect（切面）：Pointcut和Advice的结合。
+* Target（目标对象）：要增强的类称为Target。
+
+这些是对AOP的简单介绍
+
+#### 4.12.2 Spring Boot支持
+
+Spring Boot在Spring的基础上对AOP的配置提供了自动化配置解决方案 spring-boot-starter-aop，使开发者能够更加便捷的在Spring Boot项目中使用AOP。
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-aop</artifactId>
+</dependency>
+```
+
+在 `com.dk.aop.service`包下创建UserService
+
+```java
+@Service
+public class UserService {
+    public String getUserById(Integer id) {
+        System.out.println("getUserById");
+        return "user";
+    }
+
+    public void deleteUserById(Integer id) {
+        System.out.println("delete...");
+    }
+}
+```
+
+接下来创建切面
+
+```java
+@Component
+@Aspect
+public class LogAspect {
+    @Pointcut("execution(* com.dk.aop.service.*.*(..))")
+    public void pc() {}
+
+    @Before(value = "pc()")
+    public void before(JoinPoint jp) {
+        String name = jp.getSignature().getName();
+        System.out.println(name + "方法开始执行");
+    }
+
+    @After(value = "pc()")
+    public void after(JoinPoint jp) {
+        String name = jp.getSignature().getName();
+        System.out.println(name + "方法执行结束");
+    }
+
+    @AfterReturning(value = "pc()", returning = "result")
+    public void afterReturning(JoinPoint jp, Object result) {
+        String name = jp.getSignature().getName();
+        System.out.println(name + "方法返回值为：" + result);
+    }
+
+    @AfterThrowing(value = "pc()", throwing = "e")
+    public void afterThrowing(JoinPoint jp, Exception e) {
+        String name = jp.getSignature().getName();
+        System.out.println(name + "方法抛异常了，异常是：" + e.getMessage());
+    }
+    
+    @Around(value = "pc()")
+    public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        return pjp.proceed();
+    }
+}
+```
+
+代码解释：
+
+* @Aspect注解表示这是一个切面类
+* 定义pc方法，使用了@Pointcut注解，这是一个切入点定义，execution中的第一个`*`表示任意返回值，第二个`*`表示service包下的任意类，第三个`*`表示类中的任意方法，括号中的两个`..`表示方法参数任意，即这里描述的切入点为service包下所有中的所有方法。
+* @Before注解表示这是一个前置通知，该方法在目标方法执之前执行。通过JoinPoint参数可以获取目标方法的方法名，修饰符等信息。
+* @After注解表示这是一个后置通知，在目标方法执行之后执行。
+* @AfterReturning注解表示这是一个返回通知，该方法获取目标方法的返回值，@AfterReturning注解的returning参数是指返回值的变量名，对应方法的参数。注意，在方法参数中定义了result的类型为Object，表示目标方法的返回值可以是任意类型，若result参数的类型为Long，则该方法只能处理目标方法返回值为Long的情况
+* @AfterThrowing注解表示这是一个异常通知，即当目标方法发生异常时，该方法会被调用，异常类型为Exception表示所有的异常都会进入该方法中执行，若异常类型为ArithmeticException，则表示只有目标方法抛出的ArithmeticException才会进入该方法中处理。
+* @Around注解表示这是一个环绕通知，环绕通知时所有通知里功能最强大的通知，可以实现前置通知、后置通知、异常通知、以及返回值通知的功能。目标方法进入环绕通知后，通过调用ProceedingJoinPoint对象的proceed方法使目标方法继续执行，开发者可以在此修改目标方法的执行参数、返回值等。并且可以在此处理目标方法的异常。
+
+配置完成后，接下来在Controller中创建接口，分别调用UserService中的两个方法，即可看到LogAspect中的代码动态的嵌入到目标方法中执行了
+
+```java
+@RestController
+public class UserController {
+    @Autowired
+    UserService userService;
+
+    @GetMapping("/getUser")
+    public String getUser(Integer id) {
+        return userService.getUserById(id);
+    }
+
+    @GetMapping("/deleteUser")
+    public void deleteUser(Integer id) {
+        userService.deleteUserById(id);
+    }
+}
+```
+
+### 4.13 其他
+
+#### 4.13.1 自定义欢迎页
 
