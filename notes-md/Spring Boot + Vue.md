@@ -2347,3 +2347,181 @@ public class UserController {
 
 #### 4.13.1 自定义欢迎页
 
+Spring Boot项目在启动后，首先会去静态资源路径下查找index.html作为首页文件，若查找不到，则会去查找动态的index文件作为首页。
+
+例如，如果想使用静态的index.html页面作为项目首页，那么只需要在**resources/static/**路径下创建index.html文件即可。若想使用动态页面作为首页，则需要在 **resources/templates/**目录下创建index.html（Thymeleaf模板）或者index.ftl（FreeMarker），然后在Controller中返回逻辑视图名
+
+```java
+@Controller
+public class IndexController {
+    @GetMapping("/")
+    public String index() {
+        return "index";
+    }
+}
+```
+
+> 自定义错误页静态/模板页面条件相同时，优先展示模板页面；首页欢迎页静态/模板页面相同条件时，优先展示静态页面
+
+#### 4.13.2 自定义favicon
+
+favicon.ico是浏览器选项卡左上角的图标，可以放在静态资源路径下或者类路径下，静态资源路径下的favicon.ico优先级高于类路径下的favicon.ico
+
+将一张.ico图片重命名为favicon，复制到 **resources/static/**路径下
+
+![](../images/spring boot + vue/favicon.png)
+
+启动项目，查看效果
+
+![](../images/spring boot + vue/替换favicon效果.png)
+
+#### 4.13.3 除去某个自动配置
+
+Spring Boot中提供了大量的自动化配置，例如上文提到的ErrorMvcAutoConfiguration、ThymeleafAutoConfiguration、FreeMarkerAutoConfiguration、MultipartAutoConfiguration等，这些自动化配置可以减少相应的操作配置，达到开箱即用的效果，在Spring Boot的入口类上有一个@SpringBootApplication注解，该注解是一个组合注解，由@SpringBootConfiguration、@EnableAutoConfiguration以及@ComponentScan组成，其中@Enable Auto Configuration注解开启自动化配置，相关的自动化配置类就会被使用，如果开发者不想使用某个自动化配置，按如下方式排除去自动化配置即可。
+
+```java
+@SpringBootApplication(exclude = {ErrorMvcAutoConfiguration.class, GsonAutoConfiguration.class})
+public class App {
+    public static void main(String[] args) {
+        SpringApplication.run(App.class, args);
+    }
+}
+```
+
+此时访问出错不会自动跳转了，由于exclude属性值是一个数组，因此有多个要排除的自动化配置类时只需要继续添加即可。除了这种配置外，也可以在application.properties配置文件中配置
+
+```properties
+spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.web.servlet.error.ErrorMvcAutoConfiguration
+```
+
+## 5.0 Spring Boot整合持久层技术
+
+持久层是JavaEE中访问数据库的核心操作，Spring Boot中对常见的持久层框架都提供了自动化配置，例如JdbcTemplate、JPA等，MyBatis的自动化配置则是官方提供的。
+
+### 5.1 整合JdbcTemplate
+
+JdbtTemplate是Spring提供的一套JDBC模板框架，利用AOP技术来解决直接使用JDBC时大量重复代码的问题。JdbcTemplate虽然没有MyBatis那么灵活，但是比直接使用JDBC要方便很多。Spring Boot中对JdbcTemplate的使用提供了自动化配置类JdbcTemplateAutoConfiguration
+
+```java
+@Configuration
+@ConditionalOnClass({DataSource.class, JdbcTemplate.class})
+@ConditionalOnSingleCandidate(DataSource.class)
+@AutoConfigureAfter({DataSourceAutoConfiguration.class})
+@EnableConfigurationProperties({JdbcProperties.class})
+public class JdbcTemplateAutoConfiguration {
+    public JdbcTemplateAutoConfiguration() {
+    }
+
+    @Configuration
+    @Import({JdbcTemplateAutoConfiguration.JdbcTemplateConfiguration.class})
+    static class NamedParameterJdbcTemplateConfiguration {
+        NamedParameterJdbcTemplateConfiguration() {
+        }
+
+        @Bean
+        @Primary
+        @ConditionalOnSingleCandidate(JdbcTemplate.class)
+        @ConditionalOnMissingBean({NamedParameterJdbcOperations.class})
+        public NamedParameterJdbcTemplate namedParameterJdbcTemplate(JdbcTemplate jdbcTemplate) {
+            return new NamedParameterJdbcTemplate(jdbcTemplate);
+        }
+    }
+
+    @Configuration
+    static class JdbcTemplateConfiguration {
+        private final DataSource dataSource;
+        private final JdbcProperties properties;
+
+        JdbcTemplateConfiguration(DataSource dataSource, JdbcProperties properties) {
+            this.dataSource = dataSource;
+            this.properties = properties;
+        }
+
+        @Bean
+        @Primary
+        @ConditionalOnMissingBean({JdbcOperations.class})
+        public JdbcTemplate jdbcTemplate() {
+            JdbcTemplate jdbcTemplate = new JdbcTemplate(this.dataSource);
+            Template template = this.properties.getTemplate();
+            jdbcTemplate.setFetchSize(template.getFetchSize());
+            jdbcTemplate.setMaxRows(template.getMaxRows());
+            if (template.getQueryTimeout() != null) {
+                jdbcTemplate.setQueryTimeout((int)template.getQueryTimeout().getSeconds());
+            }
+
+            return jdbcTemplate;
+        }
+    }
+}
+```
+
+从上面这段源码中可以看出，当classpath下存在DataSource和JdbcTemplate并且DataSource只有一个实例时，自动配置才会生效，若开发者没有提供JdbcOperations，则Spring Boot会自动向容器注入一个JdbcTemplate（JdbcTemplate时JdbcOperations的子类）。
+
+1. 创建数据库和表
+
+在数据库中创建表
+
+```sql
+-- 创建库
+CREATE DATABASE `CHAPTER` DEFAULT CHARACTER SET utf8;
+-- 切换当前数据库为 CHATPER
+use `CHAPTER`;
+-- 创建表
+CREATE TABLE `book` ( `id` int(11) NOT NULL AUTO_INCREMENT, `name` varchar(50) DEFAULT NULL, `author` varchar(20)DEFAULT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+-- 插入数据
+INSERT INTO `book` (`id`, `name`, `author`) VALUES (1, 'SanGuoYanYi', 'LuoGuanZhong'),(2, 'ShuiHuZhuan', 'ShiNaiAn');
+```
+
+2. 创建项目，添加依赖
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>druid</artifactId>
+        <version>1.1.9</version>
+    </dependency>
+</dependencies>
+```
+
+spring-boot-starter-jdbc中提供了spring-jdbc，另外还加入了数据库驱动依赖和数据库连接池依赖。
+
+3. 数据库配置
+
+   在application.properties中配置数据库基本连接信息：
+
+   ```yaml
+   spring:
+     datasource:
+       type: com.alibaba.druid.pool.DruidDataSource
+       url: jdbc:mysql:///CHAPTER
+       username: root
+       password: 123456
+   ```
+
+4. 创建实体类
+
+```java
+@Data
+public class Book {
+    private Integer id;
+    private String name;
+    private String author;
+}
+```
+
+5. 创建数据库访问层
+
