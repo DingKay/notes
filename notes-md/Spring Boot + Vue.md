@@ -2525,3 +2525,533 @@ public class Book {
 
 5. 创建数据库访问层
 
+```java
+@Repository
+public class BookDao {
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
+    public int addBook(Book book) {
+        return jdbcTemplate.update("INSERT INTO book (name, author) values (?, ?)", book.getName(), book.getAuthor());
+    }
+    
+    public int updateBook(Book book) {
+        return jdbcTemplate.update("UPDATE book SET name = ? , author = ? WHERE id = ?", book.getName(),
+                book.getAuthor(), book.getId());
+    }
+    
+    public int deleteBookById(Integer id) {
+        return jdbcTemplate.update("DELETE FROM book where id = ?", id);
+    }
+    
+    public Book getBookById(Integer id) {
+        return jdbcTemplate.queryForObject("SELECT * FROM book WHERE id = ?", new BeanPropertyRowMapper<>(Book.class), id);
+    }
+    
+    public List<Book> getAllBooks() {
+        return jdbcTemplate.query("SELECT * FROM book", new BeanPropertyRowMapper<>(Book.class));
+    }
+}
+```
+
+代码解释：
+
+* 创建BookDao，注入JdbcTemplate。由于已经添加了Spring-jdbc相关的依赖，JdbcTemplate会被自动注入到Spring容器中，因此这里可以直接注入JdbcTemplate使用
+* 在JdbcTemplate中，增删改三种类型的操作主要使用update和batchUpdate方法来完成，query和queryForObject方法主要用来完成查询功能，另外，execute方法可以用来执行任意SQL、call方法用来调用存储过程等。
+* 在执行查询操作时，需要有一个RowMapper将查询出来的列和实体类中的属性一一对应，如果列名和属性名都是相同的，那么可以直接使用BeanPropertyRowMapper；如果列名和属性名不同，就需要开发者自己实现RowMapper接口，将列和实体类属性一一对应起来。
+
+6. 创建Service和Controller
+
+创建BookService和BookController
+
+```java
+@Service
+public class BookServiceImpl implements BookService {
+    @Autowired
+    BookDao bookDao;
+
+    @Override
+    public int addBook(Book book) {
+        return bookDao.addBook(book);
+    }
+
+    @Override
+    public int updateBook(Book book) {
+        return bookDao.updateBook(book);
+    }
+
+    @Override
+    public int deleteBookById(Integer id) {
+        return bookDao.deleteBookById(id);
+    }
+
+    @Override
+    public Book getBookById(Integer id) {
+        return bookDao.getBookById(id);
+    }
+
+    @Override
+    public List<Book> getAllBooks() {
+        return bookDao.getAllBooks();
+    }
+}
+@RestController
+public class BookController {
+    @Autowired
+    BookService bookService;
+
+    @GetMapping("/bookOps")
+    public void bookOps() {
+        Book b1 = new Book();
+        b1.setName("西厢记");
+        b1.setAuthor("王实甫");
+        int addBook = bookService.addBook(b1);
+        System.out.println("addBook = " + addBook);
+        Book b2 = new Book();
+        b2.setId(1);
+        b2.setName("朝花夕拾");
+        b2.setAuthor("鲁迅");
+        int updateBook = bookService.updateBook(b2);
+        System.out.println("updateBook = " + updateBook);
+        Book getBookById = bookService.getBookById(1);
+        System.out.println("getBookById = " + getBookById);
+        int deleteBookById = bookService.deleteBookById(2);
+        System.out.println("deleteBookById = " + deleteBookById);
+        List<Book> allBooks = bookService.getAllBooks();
+        System.out.println("allBooks = " + allBooks);
+    }
+}
+```
+
+### 5.2 整合MyBatis
+
+MyBatis是一款优秀的持久层框架，原名iBatis，2010年由ApacheSoftWareFoundation迁移到Google Code并改名为MyBatis，2013年又迁移到GitHub上。MyBatis支持定制化SQL、存储过程以及高级映射，MyBatis几乎避免了所有JDBC代码手动设置参数以及获取结果集。在传统的SSM框架整合中，使用MyBatis需要大量的XML配置，而在Spring Boot中提供了一套自动化配置方案。
+
+1. 创建项目
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.mybatis.spring.boot</groupId>
+        <artifactId>mybatis-spring-boot-starter</artifactId>
+        <version>1.3.2</version>
+    </dependency>
+    <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>druid</artifactId>
+        <version>1.1.9</version>
+    </dependency>
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+</dependencies>
+```
+
+2. 创建数据库、表、实体类等
+
+3. 创建数据库访问层
+
+```java
+@Mapper
+public interface BookMapper {
+    int addBook(Book book);
+    int deleteBookById(Integer id);
+    int updateBookById(Book book);
+    Book getBookById(Integer id);
+    List<Book> getAllBooks();
+}
+```
+
+代码解释：
+
+* 在项目的根包下面创建一个子包mapper，在mapper创建BookMapper
+* 有两种方式指明该类是一个Mapper；第一种如前面代码中所示，在BookMapper上添加一个@Mapper注解，表明该接口是一个MyBatis中的Mapper，这种方式需要在每一个Mapper上都添加注解；还有一种简单的方式是在配置类上添加@MapperScan（"包名"）注解，表示扫描某个包下的所有接口作为Mapper；
+
+4. 创建BookMapper.xml
+
+```xml
+<mapper namespace="com.dk.mapper.BookMapper">
+    <insert id="addBook" parameterType="com.dk.entity.Book">
+        INSERT INTO book(name, author) VALUES (#{name}, #{author})
+    </insert>
+    <delete id="deleteBookById" parameterType="com.dk.entity.Book">
+        DELETE FROM book where id = #{id}
+    </delete>
+    <update id="updateBookById" parameterType="com.dk.entity.Book">
+        UPDATE book SET name = #{name}, author = #{author} WHERE id = #{id}
+    </update>
+    <select id="getBookById" parameterType="integer" resultType="com.dk.entity.Book">
+        SELECT * FROM book WHERE id = #{id}
+    </select>
+    <select id="getAllBooks" resultType="com.dk.entity.Book">
+        SELECT * FROM book
+    </select>
+</mapper>
+```
+
+代码解释：
+
+* 针对BookMapper接口中的每一个方法都在BookMapper.xml中列出了实现
+* #{}用来代替接口中的参数，实体类中的属性可以直接通过#{实体类属性名}获取
+
+5. 创建Service和Controller
+
+6. 配置pom.xml
+
+在Maven 工程中，XML配置文件建议写在resources路径下，但是上文的Mapper.xml文件写在包下，Maven在运行时会忽略包下的XML文件，因此需要在pom.xml文件中重新指明资源文件位置
+
+```xml
+<build>
+    <resources>
+        <resource>
+            <directory>src/main/java</directory>
+            <includes>
+                <include>**/*.xml</include>
+            </includes>
+        </resource>
+        <resource>
+            <directory>src/main/resources</directory>
+        </resource>
+    </resources>
+</build>
+```
+
+启动项目
+
+![](../images/spring boot + vue/mybatis操作book表日志.png)
+
+### 5.3 整合Spring Data JPA
+
+JPA（Java Persistence API）和Spring Data是两个范畴的概念；
+
+Hibernate是一个ORM框架，而JPA是一种ORM规范，JPA和Hibernate的关系就像JDBC和JDBC驱动的关系，即JPA指定了ORM规范，而Hibernate是这些规范的实现（事实上，是先有Hibernate后有JPA，JPA的规范起草者也是Hibernate的作者），因此从功能上来说，JPA相当于Hibernate的子集；
+
+Spring Data是Spring的一个子项目，致力于简化数据库访问，通过规范的方法名来分析开者的意图，进而减少数据库访问层的代码量；Spring Data不仅支持关系型数据库，也支持非关系型数据库；
+
+1. 创建数据库
+
+创建数据库jpa
+
+```sql
+CREATE DATABASE `jpa` DEFAULT CHARACTER SET utf8
+```
+
+2. 创建项目
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>druid</artifactId>
+        <version>1.1.9</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+</dependencies>
+```
+
+3. 数据库配置
+
+```yaml
+spring:
+  datasource:
+  ## 基本数据库配置
+    username: root
+    password: 123456
+    type: com.alibaba.druid.pool.DruidDataSource
+    url: jdbc:mysql:///jpa
+  ## jpa配置
+  jpa:
+    ## 是否打印sql
+    show-sql: true
+    ## mysql数据库
+    database: mysql
+    hibernate:
+      ## 项目启动时，根据实体类更新数据库中的表（其他可选值为 crete、create-drop、validate、no）
+      ddl-auto: update
+    properties:
+      hibernate:
+        ## 使用方言是MySQL57Dialect
+        dialect: org.hibernate.dialect.MySQL57Dialect
+```
+
+4. 创建实体类
+
+```java
+@Data
+@Entity(name = "t_book")
+public class Book {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(name = "book_name", nullable = false)
+    private String name;
+
+    @Column(name = "book_author", nullable = false)
+    private String author;
+
+    @Column(name = "book_price", nullable = false)
+    private Float price;
+
+    @Transient
+    private String description;
+}
+```
+
+代码解释：
+
+* @Entity注解表示该类是一个实体类，在项目启动时会根据该类自动生成一张表，表的名称即@Entity注解中的name值，如果不配置name，则默认为类名
+* 所有的实体类都要有主键，@Id注解表示该属性是一个主键，@GeneratedValue注解表示可以定制建的自动生成，strategy表示主键的生成策略
+* 默认情况下，生成的表中字段的名称就是实体类中属性的名称，通过@Column注解可以定制生成字段的属性，name表示该属性对应的数据表中字段的名称，nullable表示该字段是否可以为空
+* @Transient注解表示在生成数据库时的表映射，该属性被忽略，即不生成对应的字段。
+
+5. 创建BookDao接口
+
+创建BookDao接口，继承JpaRepository
+
+```java
+public interface BookDao extends JpaRepository<Book, Integer> {
+    List<Book> getBooksByAuthorStartingWith(String author);
+    List<Book> getBooksByPriceGreaterThan(Float price);
+    @Query(value = "select * from t_book where id = (select max(id) from t_book)", nativeQuery = true)
+    Book getMaxIdBook();
+    @Query(value = "select b from t_book b where b.id > :id and b.author = :author")
+    List<Book> getBooksByIdGreaterThanAndAuthor(@Param("author") String author, @Param("id") Integer id);
+    @Query(value = "select b from t_book b where b.id < ?2 and b.name like %?1%")
+    List<Book> getBooksByIdAndNameLike(String name, Integer id);
+}
+```
+
+代码解释：
+
+* 自定义BookDao继承自JpaRepository。其中提供了一些基本的数据库操作方法，有基本的增删改查、分页查询、排序查询等。
+* 第二行定义的方法表示查询以某个字符开始的所有书
+* 第三行定义的方法表示查询单价大于某个值的所有书
+* Spring Data JPA中，只要方法的定义符合既定规范，Spring Data就能分析出开发者的意图。从而避免开发者定义SQL，所谓的既定规范，就是一定的方法命名规则
+
+| KeyWords            | 方法命名举例                      | 对应的SQL                      |
+| ------------------- | --------------------------------- | ------------------------------ |
+| And                 | findByNameAndAge                  | where name = ? and age = ?     |
+| Or                  | findByNameOrAge                   | where name = ? or age = ?      |
+| Is                  | findByAgeIs                       | where age = ?                  |
+| Equals              | findByEquals                      | where id = ?                   |
+| Between             | findByAgeBetween                  | where age between ? and ?      |
+| LessThan            | findByAgeLessThan                 | where age < ?                  |
+| LessThanEquals      | findByAgeLessThanEquals           | where age <= ?                 |
+| GreaterThan         | findByAgeGreaterThan              | where age > ?                  |
+| GreaterThanEquals   | findByAgeGreaterThanEquals        | where age >= ?                 |
+| After               | findByAgeAfter                    | where age > ?                  |
+| Before              | findByAgeBefore                   | where age < ?                  |
+| IsNull              | findByNameIsNull                  | where name is null             |
+| IsNotNull,NotNull   | findByNameNotNull                 | where name is not null         |
+| Not                 | findByGenderNot                   | where gender <>?               |
+| In                  | findByAgeIn                       | where age in (?)               |
+| NotIn               | findByAgeNotIn                    | where age not in (?)           |
+| NotLike             | findByNameNotLike                 | where name not like ?          |
+| Like                | findByNameLike                    | where name like ?              |
+| StartingWith        | findByNameStartingWith            | where name like '?%'           |
+| EndingWith          | findByNameEndingWith              | where name like '%?'           |
+| Containing,Contains | findByNameContaining              | where name like '%?%'          |
+| OrderBy             | findByAgeGreaterThanOrderByIdDesc | where age > ? order by id desc |
+| True                | findByEnableTrue                  | where enabled = true           |
+| False               | findByEnabledFalse                | where enabled = false          |
+| IgnoreCase          | findByNameIgnoreCase              | where UPPER(name) = UPPER(?)   |
+
+* 既定的方法命名规则不一定满足所有的开发需求，因此Spring Data JPA也支持自定义JPQL（Java Persistence Query Language）或者原生SQL，nativeQuery = true表示使用原生的SQL查询
+* 第7~9行表示根据id和author进行查询，这里使用默认的JPQL语句。JPQL是一种面向对象表达式语言，可以将SQL语法和简单查询语句绑定在一起，使用这种语言编写的查询是可移植的，可以被编译成所有主流数据库服务器上面的SQL。JPQL与原生SQL语句类似，并且完全面向对象，通过类名和属性访问，而表示表名和表的属性，第7~9行的查询使用 `：id`、 `：name`这种方式进行参数绑定，注意：这里使用的列名是属性的名称而不是数据库中列的名称。
+* 第10、11行也是自定义JPQL查询，不同的是传参方式使用 `？1、？2`这种方式，注意：方法中参数的顺序要与参数声明的顺序一致
+* 如果BookDao中的方法涉及修改操作，就需要添加@Modifying注解并添加事务。
+
+6. 创建BookService
+
+```java
+@Service
+public class BookServiceImpl implements BookService {
+    @Autowired
+    BookDao bookDao;
+
+    @Override
+    public void addBook(Book book) {
+        bookDao.save(book);
+    }
+
+    @Override
+    public Page<Book> getBookByPage(Pageable pageAble) {
+        return bookDao.findAll(pageAble);
+    }
+
+    @Override
+    public List<Book> getBooksByAuthorStartingWith(String author) {
+        return bookDao.getBooksByAuthorStartingWith(author);
+    }
+
+    @Override
+    public List<Book> getBooksByPriceGreaterThan(Float price) {
+        return bookDao.getBooksByPriceGreaterThan(price);
+    }
+
+    @Override
+    public Book getMaxIdBook() {
+        return bookDao.getMaxIdBook();
+    }
+
+    @Override
+    public List<Book> getBooksByIdGreaterThanAndAuthor(String author, Integer id) {
+        return bookDao.getBooksByIdGreaterThanAndAuthor(author, id);
+    }
+
+    @Override
+    public List<Book> getBooksByIdAndNameLike(String name, Integer id) {
+        return bookDao.getBooksByIdAndNameLike(name, id);
+    }
+}
+```
+
+代码解释：
+
+* 第六行使用save方法将对象数据保存到数据库，save方法是由JpaRepository接口提供的。
+* 第九行是一个分页查询，使用findAll方法，返回值为Page<Book>，该对象中包含分页常用数据，例如总记录数，总页数，每页记录数，当前页记录数等。
+
+7. 创建BookController
+
+创建Controller，对数据测试
+
+```java
+@RestController
+public class BookController {
+    @Autowired
+    BookService bookService;
+
+    @GetMapping("findAll")
+    public void findAll() {
+        PageRequest pageRequest = PageRequest.of(2, 3);
+        Page<Book> bookByPage = bookService.getBookByPage(pageRequest);
+        System.out.println("总页数：" + bookByPage.getTotalPages());
+        System.out.println("总记录数：" + bookByPage.getTotalElements());
+        System.out.println("查询结果：" + bookByPage.getContent());
+        System.out.println("当前页数：" + (bookByPage.getNumber() + 1));
+        System.out.println("当前页记录数：" + bookByPage.getNumberOfElements());
+        System.out.println("每页记录数：" + bookByPage.getSize());
+    }
+
+    @GetMapping("/search")
+    public void search() {
+        List<Book> b1 = bookService.getBooksByIdGreaterThanAndAuthor("鲁迅", 7);
+        List<Book> b2 = bookService.getBooksByAuthorStartingWith("吴");
+        List<Book> b3 = bookService.getBooksByIdAndNameLike("西", 8);
+        List<Book> b4 = bookService.getBooksByPriceGreaterThan(30F);
+        Book maxIdBook = bookService.getMaxIdBook();
+        System.out.println("b1:" + b1);
+        System.out.println("b2:" + b2);
+        System.out.println("b3:" + b3);
+        System.out.println("b4:" + b4);
+        System.out.println("maxIdBook:" + maxIdBook);
+    }
+
+    @GetMapping("/save")
+    public void save() {
+        Book book = new Book();
+        book.setAuthor("鲁迅");
+        book.setName("呐喊");
+        book.setPrice(23F);
+        bookService.addBook(book);
+    }
+}
+```
+
+代码解释：
+
+* 在findAll接口中，首先通过调用PageReques中的`of`方法构造PageRequest对象，`of`方法接受两个参数：第一个参数是页数，从0开始；第二个参数是每页显示的条数；
+* 在save接口中构造一个Book对象，直接调用save方法保存起来即可；
+
+### 5.4 多数据源
+
+所谓多数据源，就是一个JavaEE项目中采用了不同数据库实例中的多个库，或者同一个数据库实例中多个不同的库，一般来说，采用MyCat等分布式数据库中间件是比较好的解决方案。这样可以把数据库读写分离、分库分表、备份等操作交给中间件去做，Java代码只需要专注业务即可。不过，这并不意味着无法使用Java代码解决类似的问题。在Spring Framework中就可以配置多数据源，在Spring Boot中继承其衣钵，只不过配置方式有所变化
+
+#### 5.4.1 JdbcTemplate多数据源
+
+JdbcTemplate多数据源的配置是比较简单的，因为一个JdbcTemplate对应一个DataSource，开发者只需要手动提供多个DataSource，再手动配置JdbcTemplate即可
+
+1. 创建数据库
+
+创建两个数据库：`chapter01` 和 `chapter02`，两个库中都创建表 `book`，再各预设一条数据
+
+```sql
+-- 创建数据库
+CREATE DATABASE `chapter01` DEFAULT CHARACTER SET utf8;
+CREATE DATABASE `chapter02` DEFAULT CHARACTER SET utf8;
+-- 创建表
+USE `chapter01`;
+CREATE TABLE `book` (
+`id` int(11) NOT NULL AUTO_INCREMENT,
+`name` varchar(128) DEFAULT NULL,
+`author` varchar(128) DEFAULT NULL,
+PRIMARY KEY (`id`)
+) ENGINE=INNODB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
+-- 插入数据
+INSERT INTO `book` (`id`, `name`, `author`) VALUES (1, '水浒传', '施耐庵');
+-- 创建表
+USE `chapter02`;
+CREATE TABLE `book` (
+`id` int(11) NOT NULL AUTO_INCREMENT,
+`name` varchar(128) DEFAULT NULL,
+`author` varchar(128) DEFAULT NULL,
+PRIMARY KEY (`id`)
+) ENGINE=INNODB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;
+-- 插入数据
+INSERT INTO `book` (`id`, `name`, `author`) VALUES (1, '三国演义', '罗贯中');
+```
+
+2. 创建项目
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>druid-spring-boot-starter</artifactId>
+        <version>1.1.10</version>
+    </dependency>
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+</dependencies>
+```
+
+注意，这里添加的连接池依赖是 `druid-spring-boot-starter`，它可以帮助开发者在Spring Boot项目中轻松集成Druid数据库连接池和监控。
+
+3. 配置数据库连接
+
+在application.properties中配置数据库连接信息
+
+```
+
+```
+
