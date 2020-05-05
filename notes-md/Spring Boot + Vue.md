@@ -3051,7 +3051,253 @@ INSERT INTO `book` (`id`, `name`, `author`) VALUES (1, '三国演义', '罗贯�
 
 在application.properties中配置数据库连接信息
 
+```yaml
+spring:
+  datasource:
+    ## 数据源1
+    one:
+      type: com.alibaba.druid.pool.DruidDataSource
+      username: root
+      password: 123456
+      url: jdbc:mysql:///chapter01?useUnicode=true&charactorEncoding=UTF-8
+    ## 数据源2
+    two:
+      type: com.alibaba.druid.pool.DruidDataSource
+      username: root
+      password: 123456
+      url: jdbc:mysql:///chapter02?useUnicode=true&charactorEncoding=UTF-8
 ```
 
+配置两个数据源，区别主要是数据库不同
+
+4. 配置数据源
+
+创建DataSourceConfig配置数据源，根据Application.properties中的配置生成两个数据源：
+
+```java
+@Configuration
+public class DataSourceConfig {
+    @Bean
+    @ConfigurationProperties("spring.datasource.one")
+    DataSource dataSourceOne() {
+        return DruidDataSourceBuilder.create().build();
+    }
+
+    @Bean
+    @ConfigurationProperties("spring.datasource.two")
+    DataSource dataSourceTwo() {
+        return DruidDataSourceBuilder.create().build();
+    }
+}
+```
+
+代码解释：
+
+* DataSourceConfig中提供了两个数据源，dataSourceOne和dataSourceTwo，默认方法名即实例名；
+* @ConfigurationProperties注解表示使用不同前缀的配置文件来创建不同的DataSource实例
+
+5. 配置JdbcTemplate
+
+```java
+@Configuration
+public class JdbcTemplateConfig {
+    @Bean
+    JdbcTemplate jdbcTemplateOne(@Qualifier("dataSourceOne") DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
+
+    @Bean
+    JdbcTemplate jdbcTemplateTwo(@Qualifier("dataSourceTwo") DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
+}
+```
+
+代码解释：
+
+* JdbcTemplateConfig中提供两个JdbcTemplate实例。每个JdbcTemplate实例都需要提供DataSource，由于Spring容器中有两个DataSource实例，因此需要通过方法名查找。@Qualifier注解表示查找不同名称的DataSource实例注入进来。
+
+6. 创建Book、BookController
+
+```java
+@Data
+public class Book {
+    private Integer id;
+    private String name;
+    private String author;
+}
+```
+
+```java
+@RestController
+public class BookController {
+    @Resource(name = "jdbcTemplateOne")
+    JdbcTemplate jdbcTemplateOne;
+
+    @Autowired
+    @Qualifier("jdbcTemplateTwo")
+    JdbcTemplate jdbcTemplateTwo;
+
+    @GetMapping("/test1")
+    public void test1() {
+        List<Book> bookList1 = jdbcTemplateOne.query("select * from book", new BeanPropertyRowMapper<>(Book.class));
+        List<Book> bookList2 = jdbcTemplateTwo.query("select * from book", new BeanPropertyRowMapper<>(Book.class));
+        System.out.println("bookList1 = " + bookList1);
+        System.out.println("bookList2 = " + bookList2);
+    }
+}
+```
+
+简单起见，没有添加Service层，直接将JdbcTemplate注入到了Controller中，在Controller中注入两个不同的JdbcTemplate有两种方式：一种是使用@Resource注解，并指明 **name** 属性，即按 name 进行装配，此时会根据实例名查找相应的实例注入；另一种是使用@AutoWired注解结合@Qualifier注解，效果等同于@Resource注解
+
+测试输出结果：
+
+```
+bookList1 = [Book(id=1, name=水浒传, author=施耐庵)]
+bookList2 = [Book(id=1, name=三国演义, author=罗贯中)]
+```
+
+#### 5.4.2 MyBatis多数据源
+
+JdbcTemplate可以配置多数据源，MyBatis也可以配置，但是步骤稍微复杂
+
+1. 准备工作
+
+本案例中使用数据库与5.4.1小节一致，依赖基本一致，只不过将spring-boot-starter-jdbc依赖换成MyBatis依赖
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>org.mybatis.spring.boot</groupId>
+        <artifactId>mybatis-spring-boot-starter</artifactId>
+        <version>1.3.2</version>
+    </dependency>
+    <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>druid-spring-boot-starter</artifactId>
+        <version>1.1.10</version>
+    </dependency>
+</dependencies>
+```
+
+2. 创建MyBatis配置
+
+配置MyBatis主要提供SqlSessionFactory实例和SqlSessionTemplate实例
+
+```java
+@Configuration
+@MapperScan(value = "com.dk.mapper.one", sqlSessionFactoryRef = "sqlSessionFactoryBeanOne")
+public class MyBatisConfigOne {
+    @Autowired
+    @Qualifier("dataSourceOne")
+    DataSource dataSource;
+
+    @Bean
+    SqlSessionFactory sqlSessionFactoryBeanOne() throws Exception {
+        SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
+        factoryBean.setDataSource(dataSource);
+        return factoryBean.getObject();
+    }
+
+    @Bean
+    SqlSessionTemplate sqlSessionTemplateOne() throws Exception {
+        return new SqlSessionTemplate(sqlSessionFactoryBeanOne());
+    }
+}
+```
+
+数据源二同理：
+
+```java
+@Configuration
+@MapperScan(value = "com.dk.mapper.two", sqlSessionFactoryRef = "sqlSessionFactoryBeanTwo")
+public class MyBatisConfigTwo {
+
+    @Resource(name = "dataSourceTwo")
+    DataSource dataSource;
+
+    @Bean
+    SqlSessionFactory sqlSessionFactoryBeanTwo() throws Exception {
+        SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
+        factoryBean.setDataSource(dataSource);
+        return factoryBean.getObject();
+    }
+
+    @Bean
+    SqlSessionTemplate sqlSessionTemplateTwo() throws Exception {
+        return new SqlSessionTemplate(sqlSessionFactoryBeanTwo());
+    }
+}
+```
+
+代码解释：
+
+* 在@MapperScan注释中指定Mapper接口所在位置，同时指定SqlSessionFactory的实例名，则该位置下的Mapper将使用SqlSessionFactory实例
+* 提供SqlSessionFacory实例，直接创建出来，同时将DataSource的实例设置给SqlSessionFactory，这里创建的SqlSessionFacory实例也就是@MapperScan注解的sqlSessionFactoryRel参数指定的实例
+* 提供一个SqlSessionTemplate实例，这是一个线程安全类，主要用来管理MyBatis中的SqlSession操作。
+
+3. 创建Mapper
+
+```java
+@Mapper
+public interface MapperOne {
+    List<Book> getAllBooks();
+}
+```
+
+对应的Mapper.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.dk.mapper.one.MapperOne" >
+    <select id="getAllBooks" resultType="com.dk.entity.Book">
+        SELECT * FROM book;
+    </select>
+</mapper>
+```
+
+数据源二同理；
+
+4. 创建Controller，简便起见，直接将Mapper注入Controller中
+
+```java
+@RestController
+public class BookController {
+
+    @Autowired
+    MapperOne mapperOne;
+
+    @Autowired
+    MapperTwo mapperTwo;
+
+    @GetMapping("/test")
+    public void test() {
+        List<Book> bookList1 = mapperOne.getAllBooks();
+        List<Book> bookList2 = mapperTwo.getAllBooks();
+        System.out.println("bookList1 = " + bookList1);
+        System.out.println("bookList2 = " + bookList2);
+    }
+}
+```
+
+5. 测试结果
+
+```
+bookList1 = [Book(id=1, name=水浒传, author=施耐庵)]
+bookList2 = [Book(id=1, name=三国演义, author=罗贯中)]
 ```
 
