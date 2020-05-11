@@ -3301,3 +3301,284 @@ bookList1 = [Book(id=1, name=水浒传, author=施耐庵)]
 bookList2 = [Book(id=1, name=三国演义, author=罗贯中)]
 ```
 
+#### 5.4.3 JPA多数据源
+
+JPA和MyBatis配置多数据源类型，不同的是，JPA配置时主要提供不同的LocalContainerEntityManagerFactoryBean以及事务管理器。
+
+1. 准备工作
+
+将jdbc依赖替换成jpa依赖
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+```
+
+application.properties在多数据源原有的基础上再添加如下配置
+
+```properties
+## 多数据源配置
+spring.datasource.one.password=123456
+spring.datasource.one.username=root
+spring.datasource.one.type=com.alibaba.druid.pool.DruidDataSource
+spring.datasource.one.url=jdbc:mysql:///chapter01?useUnicode=true&charactorEncoding=UTF-8
+spring.datasource.two.password=123456
+spring.datasource.two.username=root
+spring.datasource.two.type=com.alibaba.druid.pool.DruidDataSource
+spring.datasource.two.url=jdbc:mysql:///chapter02?useUnicode=true&charactorEncoding=UTF-8
+## 新增jpa配置
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL57InnoDBDialect
+spring.jpa.hibernate.ddlAuto=update
+spring.jpa.properties.hibernate.database=mysql
+spring.jpa.showSql=true
+spring.jpa.openInView=true
+```
+
+> 注意：这里的配置与单独的JPA有区别，因为在后文的配置中要从JpaProperties中的getProperties方法中获取JPA配置，因此这里的JPA属性前缀使用 spring.jpa.properties
+
+JpaProperties部分源码如下
+
+```java
+@ConfigurationProperties(
+    prefix = "spring.jpa"
+)
+public class JpaProperties {
+    private Map<String, String> properties = new HashMap();
+    private final List<String> mappingResources = new ArrayList();
+    private String databasePlatform;
+    private Database database;
+    private boolean generateDdl = false;
+    private boolean showSql = false;
+    private Boolean openInView;
+    private JpaProperties.Hibernate hibernate = new JpaProperties.Hibernate();
+
+    public JpaProperties() {
+    }
+    //...
+}
+```
+
+DataSourceConfig的配置也基本相同，不同的是这里多了一个@Primary注解
+
+```java
+@Configuration
+public class MyDataSource {
+    @Bean
+    @Primary
+    @ConfigurationProperties("spring.datasource.one")
+    DataSource dataSourceOne() {
+        return DruidDataSourceBuilder.create().build();
+    }
+
+    @Bean
+    @ConfigurationProperties("spring.datasource.two")
+    DataSource dataSourceTwo() {
+        return DruidDataSourceBuilder.create().build();
+    }
+}
+```
+
+2. 创建实体类
+
+```java
+@Data
+@Entity(name = "t_user")
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+    private String name;
+    private String gender;
+    private Integer age;
+}
+```
+
+3. 创建JPA配置
+
+接下来是核心配置，根据两个配置好的数据源创建两个不同的JPA配置
+
+```java
+@Configuration
+@EnableTransactionManagement
+@EnableJpaRepositories(basePackages = "com.dk.dao.one", entityManagerFactoryRef = "entityManagerFactoryBeanOne",
+ transactionManagerRef = "platformTransactionManagerOne")
+public class JpaConfigOne {
+    @Resource(name = "dataSourceOne")
+    DataSource dataSource;
+    @Autowired
+    JpaProperties jpaProperties;
+    @Bean
+    @Primary
+    LocalContainerEntityManagerFactoryBean entityManagerFactoryBeanOne(EntityManagerFactoryBuilder builder) {
+        return builder.dataSource(dataSource)
+                .properties(jpaProperties.getProperties())
+                .packages("com.dk.entity")
+                .persistenceUnit("pu1")
+                .build();
+    }
+
+    @Bean
+    PlatformTransactionManager platformTransactionManagerOne(EntityManagerFactoryBuilder builder) {
+        LocalContainerEntityManagerFactoryBean factoryOne = entityManagerFactoryBeanOne(builder);
+        return new JpaTransactionManager(Objects.requireNonNull(factoryOne.getObject()));
+    }
+}
+```
+
+代码解释：
+
+* 使用@EnableJpaRepository注解进行JPA的配置，该注解中主要配置三个属性：basePackages、entityManagerFactoryRef以及transactionManagerReg。其中，basePackages用来指定Repository所在的位置，entityManagerFactoryRef用来指定实体类管理工厂Bean的名称、transactionManagerRef则用来指定事务管理器的引用名称，这里的引用名称就是JpaConfigOnw类中注册的Bean的名称（默认的Bean名称为方法名）
+* 创建LocalContainerEntityManagerFactoryBean，该Bean将用来提供EntityManager实例，在该类的创建过程中，首先配置数据源，然后设置JPA相关配置（JpaProperties由系统自动加载），再设置实体类所在的位置，最后配置持久化单元名，若项目中只有一个EntityManagerFactory，则persistenceUnit可以省略，若有多个必须明确指定持久化单元名。
+* 由于项目中会提供两个LocalContainerEntityManagerFactoryBean实例，@Primary表示当存在多个LocalContainerEntityManagerFactoryBean实例时，该实例将被优先使用。
+* platformTransactionManagerOne方法表示创建一个事务管理器，JpaTransactionManager提供对单个EntityManagerFactory的事务支持，专门用于解决JPA中的事务管理。
+
+JPA配置类JpaConfigTwo同样，不同点是JpaConfigTwo的LocalContainerEntityManagerFactoryBean实例不需要加@Primary注解；
+
+4. 创建Repository
+
+```java
+public interface UserDaoOne extends JpaRepository<User, Integer> {
+}
+public interface UserDaoTwo extends JpaRepository<User, Integer> {
+}
+```
+
+5. 创建Controller
+
+```java
+@RestController
+public class UserController {
+    @Autowired
+    UserDaoOne userDaoOne;
+    @Autowired
+    UserDaoTwo userDaoTwo;
+
+    @GetMapping("/user")
+    public void saveUser() {
+        User userOne = new User();
+        userOne.setAge(55);
+        userOne.setName("鲁迅");
+        userOne.setGender("男");
+        userDaoOne.save(userOne);
+        User userTwo = new User();
+        userTwo.setAge(80);
+        userTwo.setName("泰戈尔");
+        userTwo.setGender("男");
+        userDaoTwo.save(userTwo);
+    }
+}
+```
+
+## 6.0 Spring Boot整合NoSQL
+
+`NoSQL`是指非关系型数据库，非关系型数据库与关系型数据库两者存在许多显著的不同点，其中最重要的是NoSQL不使用SQL作为查询语言。其数据存储可以不需要固定的表格模式，一般都有水平可扩展性的特征。NoSQL主要有以下几种不同的分类：
+
+* Key/Value键值存储。这种数据存储通常都是无数据结构的，一般被当作字符串或者是二进制数据，但是数据加载速度快，典型的使用场景是处理高并发或者用于日志系统等，这一类的数据库有 `redis`、 `Tokyo Cabinet`等。
+* 列存储数据库。列存储数据库功能相对局限，但是查找速度快，容易进行分布式扩展，一般用于分布式文件系统中，这一类的数据库有 `HBase`、 `Cassandra`等。
+* 文档型数据库。和Key/Value键值存储类似，文档型数据库也没有严格的数据格式，这既是缺点也是有点，因为不需要预先创建表结构，数据格式更加灵活，一般用于Web应用中，这一类的数据库有`MongoDB` 、 `CouchDB`等。
+* 图形数据库。图形数据库专注于构建关系图谱，例如社交网络，推荐系统等，这一类的数据库有 `Neo4j` 、 `DEX`等。
+
+### 6.1 整合Redis
+
+#### 6.1.1 Redis简介
+
+Redis是一个使用C编写的`基于内存`的NoSQL数据库，它是目前最流行的键值对存储数据库。Redis由一个Key、Value映射的字典构成，与其他NoSQL不同，Redis中的Value的类型不局限于字符串，还支持列表、集合、有序集合、散列等。Redis不仅可以当作缓存用，也可以配置数据持久化后当作NoSQL数据库使用，目前支持两种持久化方式：`快照持久化`和`AOF持久化`。另一方面，Redis也可以搭建集群或者主从复制结构，在高并发环境下具有高可用性。
+
+#### 6.1.2 Redis安装
+
+Redis版本使用4.0.10版本
+
+1. 下载Redis
+
+```
+wget http://download.redis.io/releases/redis-4.0.10.tar.gz
+```
+
+提示未找到 **wget**命令
+
+```
+yum -y install wget
+```
+
+2. 安装Redis
+
+解压下载的文件，进入解压目录进行编译
+
+```
+tar -zxf redis-4.0.10.tar.gz
+cd redis-4.0.10
+make MALLOC=libc
+make install
+```
+
+若在执行 make MALLOC=libc 命令时提示 "gcc：未找到命令"，则先安装gcc
+
+```
+yum -y install gcc
+```
+
+3. 配置Redis
+
+Redis安装成功后，修改redis.conf
+
+```
+daemonize yes
+#bind 127.0.0.1
+requirepass 123456
+protected-mode no
+```
+
+配置解释：
+
+* 第一行配置表示允许Redis在后台启动
+* 第二行配置表示绑定允许连接Redis实例的地址，注释该配置，外网则可以连接redis了
+* 第三行配置表示登陆该Redis实例所需的密码
+* 由于有了第三行的配置，需要密码登陆，所以第四行可以关闭保护模式了
+
+4. 配置Centos
+
+关闭Centos7的防火墙
+
+```
+systemctl stop firewalld.service
+systemctl disable firewalld.service
+```
+
+第一行表示关闭防火墙，第二行表示禁止防火墙开机启动
+
+5. Redis启动/关闭
+
+```
+redis-server redis.conf
+```
+
+Redis启动成功后，再执行如下命令进入Redis控制台
+
+```
+redis-cli -a 123456
+```
+
+进入控制台执行`ping`命令，如果能看到 PONG，表示Redis安装成功。
+
+如果想关闭Redis实例，可以在控制台执行 `SHUTDOWN`，然后使用 `exit`退出，或者直接在命令行执行如下命令
+
+```
+redis-cli -p 6379 -a 123456 shutdown
+```
+
+-p 表示端口号，-a 表示登陆密码
+
+**使用Docker安装Redis**
+
+```powershell
+docker pull redis:4.0.10
+docker run --restart=always -p 11080:11080 --name redis -v /c/Users/Kay/Documents/Dev/DockerData/redis4.0.10/redis.conf:/etc/redis/redis.conf -v /c/Users/Kay/Documents/Dev/DockerData/redis4.0.10/data:/data -d redis:4.0.10 redis-server /etc/redis/redis.conf
+```
+
+命令解释：
+
+* 从Docker Hub上下载redis:4.0.10镜像
+* docker run 启动一个docker容器，--restart=always表示自动启动，-p 11080：11080表示容器内的端口映射，--name redis容器名为redis，-v 表示宿主机的磁盘目录挂载到容器内的文件路径，-d 表示实例容器使用的镜像，redis-server /etc/redis/redis.conf表示启动redis服务使用映射的redis.conf配置文件
+
