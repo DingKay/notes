@@ -3582,3 +3582,95 @@ docker run --restart=always -p 11080:11080 --name redis -v /c/Users/Kay/Document
 * 从Docker Hub上下载redis:4.0.10镜像
 * docker run 启动一个docker容器，--restart=always表示自动启动，-p 11080：11080表示容器内的端口映射，--name redis容器名为redis，-v 表示宿主机的磁盘目录挂载到容器内的文件路径，-d 表示实例容器使用的镜像，redis-server /etc/redis/redis.conf表示启动redis服务使用映射的redis.conf配置文件
 
+#### 6.1.3 整合Spring Boot
+
+Redis的Java客户端又很多，例如：Jedis、JRedis、Spring Data Redis等，Spring Boot借助于Spring Data Redis为Redis提供了开箱即用的自动化配置。
+
+1. 创建Spring Boot项目
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+```
+
+默认情况下，spring-boot-starter-data-redis使用的Redis工具是Lettuce，也可以自定义引入Jedis
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+    <exclusions>
+        <exclusion>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+<dependency>
+    <groupId>redis.clients</groupId>
+    <artifactId>jedis</artifactId>
+</dependency>
+```
+
+2. 配置Redis
+
+接下来在application.properties中配置Redis连接信息
+
+```properties
+spring.redis.port=11080
+spring.redis.host=localhost
+spring.redis.database=0
+spring.redis.password=123456
+spring.redis.jedis.pool.max-active=8
+spring.redis.jedis.pool.max-idle=8
+spring.redis.jedis.pool.max-wait=-1
+spring.redis.jedis.pool.min-idle=0
+```
+
+* 第一行表示redis的端口是11080
+* 第二行表示redis连接的url是本机
+* 第三行表示数据库的编号，Redis默认提供了16个Database，编号从0~15
+* 第四行表示连接Redis的auth密码
+* 第五行表示连接池的最大连接数
+* 第六行表示连接池中最大空闲连接数
+* 第七行表示连接池最大阻塞等待时间，默认为-1，表示没有限制
+* 第八行表示连接池最小空闲连接数
+* 如果项目使用了Lettuc，则只需要修改第五~八行配置中的jedis修改成lettuce即可
+
+在Spring Boot中的自动配置类中提供了RedisAutoConfiguration进行了Redis的配置
+
+```java
+@Configuration
+@ConditionalOnClass({RedisOperations.class})
+@EnableConfigurationProperties({RedisProperties.class})
+@Import({LettuceConnectionConfiguration.class, JedisConnectionConfiguration.class})
+public class RedisAutoConfiguration {
+    public RedisAutoConfiguration() {
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(
+        name = {"redisTemplate"}
+    )
+    public RedisTemplate<Object, Object> redisTemplate(RedisConnectionFactory redisConnectionFactory) throws UnknownHostException {
+        RedisTemplate<Object, Object> template = new RedisTemplate();
+        template.setConnectionFactory(redisConnectionFactory);
+        return template;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory redisConnectionFactory) throws UnknownHostException {
+        StringRedisTemplate template = new StringRedisTemplate();
+        template.setConnectionFactory(redisConnectionFactory);
+        return template;
+    }
+}
+```
+
