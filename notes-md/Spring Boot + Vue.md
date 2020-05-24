@@ -3674,3 +3674,505 @@ public class RedisAutoConfiguration {
 }
 ```
 
+由这一段源码可以看出，当我们没有提供额外的Redis实例时，Spring Boot会根据Application.properties配置中的RedisProperties，注入并创建一个默认的RedisTemplate。
+
+3. 创建实体类
+
+```java
+@Data
+public class Book implements Serializable {
+    private static final long serialVersionUID = -6295498343158900155L;
+    private String name;
+    private String author;
+    private float price;
+}
+```
+
+4. 创建Controller
+
+```java
+@RestController
+public class BookController {
+    RedisTemplate redisTemplate;
+    StringRedisTemplate stringRedisTemplate;
+    @Autowired
+    public void setRedisTemplate(RedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+    @Autowired
+    public void setStringRedisTemplate(StringRedisTemplate stringRedisTemplate) {
+        this.stringRedisTemplate = stringRedisTemplate;
+    }
+
+    @GetMapping("/test")
+    private void test() {
+        ValueOperations<String, String> stringOps = stringRedisTemplate.opsForValue();
+        stringOps.set("bookName", "三国演义");
+        String bookName = stringOps.get("bookName");
+        System.out.println("bookName = " + bookName);
+        ValueOperations ops = redisTemplate.opsForValue();
+        Book book = new Book();
+        book.setName("红楼梦");
+        book.setAuthor("曹雪芹");
+        book.setPrice(23.5F);
+        ops.set("book", book);
+        Object redisBook = ops.get("book");
+        System.out.println("redisBook = " + redisBook);
+    }
+}
+```
+
+代码解释：
+
+* StringRedisTemplate是RedisTemplate的子类，StringRedisTemplate中的Key和Value都是字符串，采用的序列化方案是 `StringRedisSerializer`，而RedisTemplate则可以用来操作对象，RedisTemplate采用的序列化方案是 `JdkSerializationRedisSerializer`，无论是StringRedisTemplate还是RedisTemplate，操作Redis的方法都是一致的。
+* StringRedisTemplate和RedisTemplate都是通过opsForValue，opsForZSet或者opsForSet等方法首先获取一个操作对象，再使用该操作对象完成数据的读写。
+
+#### 6.1.4 Redis集群整合Spring Boot
+
+为了提高Redis的可扩展性，往往需要搭建Redis集群环境，这样就涉及到了Redis集群整合Spring Boot
+
+1. 搭建Redis集群
+
+   **集群原理**
+
+   在Redis集群中，所有的Redis节点彼此互联，节点内部使用二进制协议优化传输速度和带宽。当一个节点挂掉后，集群中超过半数的节点检测失效时才认为该节点已失效。不同于Tomcat集群需要使用反向代理服务器，Redis集群中的任意节点都可以直接和Java客户端连接。Redis集群上的数据分配则是采用哈希槽（HASH SLOT），Redis集群中内置了`16384`个哈希槽，当有数据需要存储时，Redis会首先使用CRC16算法对Key进行计算，将计算获得的结果对16384取模，这样每一个Key都会对应一个取值在 `0~16383`之间的哈希槽，Redis则根据这个值将该条数据存储到对应的Redis节点上
+   
+   **集群规划**
+   
+   主节点：
+   
+   127.0.0.1:8001;127.0.0.1:8002;127.0.0.1:8003
+   
+   从节点：
+   
+   127.0.0.1:9001;127.0.0.1:9002;127.0.0.1:9003
+   
+   **集群配置**
+   
+   根据节点端口创建目录并配置各个节点配置；
+   
+   ![](../images/spring boot + vue/redis集群配置.png)
+   
+   以8001主节点的redis.conf为例
+   
+   ```properties
+   取消绑定仅本机可访问的限制
+   # bind 127.0.0.1
+   配置了密码，关闭保护模式
+   protected-mode no
+   端口
+   port 8001
+   开启后台启动
+   daemonize yes
+   进程文件
+   pidfile /data/redis/cluster/8001/redis_8001.pid
+   日志文件
+   logfile "/data/redis/cluster/8001/redis-8001.log"
+   集群中每个节点都开启了密码认证，masterauth使从机可以登陆到主机上
+   masterauth 123456
+   密码认证
+   requirepass 123456
+   持久化开启
+   appendonly yes
+   集群开启
+   cluster-enabled yes
+   集群配置文件
+   cluster-config-file nodes-8001.conf
+   ```
+   
+   其他端口配置只需要修改端口号即可；
+   
+   ```
+   sed -i 's/8001/8002/g' redis.conf
+   ```
+   
+   启动所有实例；
+   
+   修改redis-trib.rb，由于每个节点都添加了密码，而该命令默认没有密码，因此登陆不上各个redis实例
+   
+   ```ruby
+   @r = Redis.new(:host => @info[:host], :port => @info[:port], :password => 123456, :timeout => 60)
+   ```
+   
+   **创建集群**
+   
+   执行如下命令创建redis集群
+   
+   ```powershell
+   ./redis-trib.rb create --replicas 1 127.0.0.1:8001 127.0.0.1:8002 127.0.0.1:8003 127.0.0.1:9001 127.0.0.1:9002 127.0.0.1:9003
+   ```
+   
+   命令解释：
+   
+   * replicas 表示每个主节点的slave数量，在集群的创建过程中会分配主机和从机，每个集群在创建过程中都将分配到一个唯一的id并分配到一段slot；
+   
+   执行命令后，输出如下信息；
+   
+   ```powershell
+   >>> Creating cluster
+   >>> Performing hash slots allocation on 6 nodes...
+   Using 3 masters:
+   127.0.0.1:8001
+   127.0.0.1:8002
+   127.0.0.1:8003
+   Adding replica 127.0.0.1:9002 to 127.0.0.1:8001
+   Adding replica 127.0.0.1:9003 to 127.0.0.1:8002
+   Adding replica 127.0.0.1:9001 to 127.0.0.1:8003
+   >>> Trying to optimize slaves allocation for anti-affinity
+   [WARNING] Some slaves are in the same host as their master
+   M: 440f991109947657dcbd746849e824e2670c8374 127.0.0.1:8001
+      slots:0-5460 (5461 slots) master
+   M: b3404b23021935b5d291f5541fd0c6de9df1ffc5 127.0.0.1:8002
+      slots:5461-10922 (5462 slots) master
+   M: 2a9baf6db12398a858f6348c3fc4edf2ed22aef4 127.0.0.1:8003
+      slots:10923-16383 (5461 slots) master
+   S: b1ccf934826c8223316db57795dbaa159c0b1b52 127.0.0.1:9001
+      replicates 440f991109947657dcbd746849e824e2670c8374
+   S: 195e39251721619d9071b6b85470895988ce41f8 127.0.0.1:9002
+      replicates b3404b23021935b5d291f5541fd0c6de9df1ffc5
+   S: 38d734c14a003686fd0de124896c302c6ae86769 127.0.0.1:9003
+      replicates 2a9baf6db12398a858f6348c3fc4edf2ed22aef4
+   Can I set the above configuration? (type 'yes' to accept): yes
+   >>> Nodes configuration updated
+   >>> Assign a different config epoch to each node
+   >>> Sending CLUSTER MEET messages to join the cluster
+   Waiting for the cluster to join...
+   >>> Performing Cluster Check (using node 127.0.0.1:8001)
+   M: 440f991109947657dcbd746849e824e2670c8374 127.0.0.1:8001
+      slots:0-5460 (5461 slots) master
+      1 additional replica(s)
+   S: b1ccf934826c8223316db57795dbaa159c0b1b52 127.0.0.1:9001
+      slots: (0 slots) slave
+      replicates 440f991109947657dcbd746849e824e2670c8374
+   S: 195e39251721619d9071b6b85470895988ce41f8 127.0.0.1:9002
+      slots: (0 slots) slave
+      replicates b3404b23021935b5d291f5541fd0c6de9df1ffc5
+   M: 2a9baf6db12398a858f6348c3fc4edf2ed22aef4 127.0.0.1:8003
+      slots:10923-16383 (5461 slots) master
+      1 additional replica(s)
+   M: b3404b23021935b5d291f5541fd0c6de9df1ffc5 127.0.0.1:8002
+      slots:5461-10922 (5462 slots) master
+      1 additional replica(s)
+   S: 38d734c14a003686fd0de124896c302c6ae86769 127.0.0.1:9003
+      slots: (0 slots) slave
+      replicates 2a9baf6db12398a858f6348c3fc4edf2ed22aef4
+   [OK] All nodes agree about slots configuration.
+   >>> Check for open slots...
+   >>> Check slots coverage...
+   [OK] All 16384 slots covered.
+   ```
+   
+   执行时报错；
+   
+   ```powershell
+   /usr/bin/env: ‘ruby’: No such file or directory
+   ```
+   
+   原因是该脚本需要 `ruby`环境
+   
+   安装ruby环境后报错
+   
+   ```powershell
+   Traceback (most recent call last):
+           2: from ./redis-trib.rb:25:in `<main>'
+           1: from /usr/lib/ruby/2.5.0/rubygems/core_ext/kernel_require.rb:59:in `require'
+   /usr/lib/ruby/2.5.0/rubygems/core_ext/kernel_require.rb:59:in `require': cannot load such file -- redis (LoadError)
+   ```
+   
+   原因是缺少模块；执行如下命令
+   
+   ```powershell
+    gem install redis
+   ```
+   
+   当集群创建成功后，登陆任意Redis实例
+   
+   ```powershell
+   ./redis-cli -p 8001 -a 123456 -c
+   ```
+   
+   -p 表示要登陆的集群实例端口，-a 表示登陆集群节点的验证密码，-c 则表示以集群的方式登陆。登陆成功后，通过`cluster info`命令查看集群状态信息；通过 `cluster nodes` 命令可以查询节点信息，在集群节点信息中，可以看到每一个节点的id，该节点是slave还是master；如果是slave那么它的master的id是什么，如果是master，那么每一个master的slot范围是多少，这些信息都会显示出来；
+   
+   
+
+![](../images/spring boot + vue/cluster-info.png)
+
+![](../images/spring boot + vue/cluster-nodes.png)
+
+**添加主节点**
+
+当集群创建成功后，随着业务的增长，可能需要增加主节点，添加主节点需要先构建主节点实例；新增8004目录，修改redis.conf后启动该实例
+
+启动成功后，执行如下命令新增节点
+
+```powershell
+./redis-trib.rb add-node 127.0.0.1:8004 127.0.0.1:8001
+```
+
+命令解释：
+
+* add-node表示新增节点
+* 127.0.0.1:8004 表示新增的实例
+* 127.0.0.1:8001 表示集群中任意的节点实例
+
+![](../images/spring boot + vue/redis-add-node.png)
+
+新增节点成功，redis-cli登陆后查看集群信息；可以看到新实例已经被添加到集群中，但是由于slot已经被之前的实例分配完了，新增加的实例没有slot，也就意味着新增加的实例没有存储数据的机会；此时需要从之前的master中拿出一部分slot分配给新实例；
+
+![](../images/spring boot + vue/新增master节点且未分配hashslot.png)
+
+首先，对slot重新分配；
+
+```powershell
+root@Kay:/data/redis/cluster# ./redis-trib.rb reshard 127.0.0.1:8001
+>>> Performing Cluster Check (using node 127.0.0.1:8001)
+M: 440f991109947657dcbd746849e824e2670c8374 127.0.0.1:8001
+   slots:0-5460 (5461 slots) master
+   1 additional replica(s)
+S: b1ccf934826c8223316db57795dbaa159c0b1b52 127.0.0.1:9001
+   slots: (0 slots) slave
+   replicates 440f991109947657dcbd746849e824e2670c8374
+S: 195e39251721619d9071b6b85470895988ce41f8 127.0.0.1:9002
+   slots: (0 slots) slave
+   replicates b3404b23021935b5d291f5541fd0c6de9df1ffc5
+M: 2a9baf6db12398a858f6348c3fc4edf2ed22aef4 127.0.0.1:8003
+   slots:10923-16383 (5461 slots) master
+   1 additional replica(s)
+M: b3404b23021935b5d291f5541fd0c6de9df1ffc5 127.0.0.1:8002
+   slots:5461-10922 (5462 slots) master
+   1 additional replica(s)
+M: d314401e0ca39949505e5e2b5d1cdf13b8c794e4 127.0.0.1:8004
+   slots: (0 slots) master
+   0 additional replica(s)
+S: 38d734c14a003686fd0de124896c302c6ae86769 127.0.0.1:9003
+   slots: (0 slots) slave
+   replicates 2a9baf6db12398a858f6348c3fc4edf2ed22aef4
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+How many slots do you want to move (from 1 to 16384)? 3000
+What is the receiving node ID? d314401e0ca39949505e5e2b5d1cdf13b8c794e4
+Please enter all the source node IDs.
+  Type 'all' to use all the nodes as source nodes for the hash slots.
+  Type 'done' once you entered all the source nodes IDs.
+Source node #1:all
+```
+
+命令解释：
+
+* `How many slots do you want to move (from 1 to 16384)? `拿出多少slot分配给新实例
+* `What is the receiving node ID?`这些slot分配给的实例id
+* `Please enter all the source node IDs.
+    Type 'all' to use all the nodes as source nodes for the hash slots.
+    Type 'done' once you entered all the source nodes IDs.
+  Source node #1:all`这些slot由哪些master节点提供；输入all为所有master实例均摊提供这些slot
+
+**添加从节点**
+
+上面的添加的节点是主节点，从节点相对来说要容易一些，添加从节点命令如下；
+
+```powershell
+./redis-trib.rb add-node --slave --master-id d314401e0ca39949505e5e2b5d1cdf13b8c794e4 127.
+0.0.1:9004 127.0.0.1:8001
+```
+
+![](../images/spring boot + vue/添加从节点成功.png)
+
+**删除节点**
+
+如果删除的是一个从节点，直接运行如下命令即可
+
+```powershell
+./redis-trib.rb del-node 127.0.0.1:8001 abcf36d1d8eb442364b640d61f83e8ecc5c6c203
+```
+
+中间的实例地址表示集群中的任意一个实例；最后的参数表示要删除节点的id；但若删除的节点占有slot，则会删除失败；此时需要将该节点的所有slot全部分配出去，然后再运行如上命令就可以删除一个slot的节点了。
+
+```powershell
+>>> Removing node abcf36d1d8eb442364b640d61f83e8ecc5c6c203 from cluster 127.0.0.1:8001
+>>> Sending CLUSTER FORGET messages to the cluster...
+>>> SHUTDOWN the node.
+```
+
+2. 配置Spring Boot项目
+
+不同于单机版本，集群版本需要手动配置
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>redis.clients</groupId>
+        <artifactId>jedis</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.data</groupId>
+        <artifactId>spring-data-redis</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-pool2</artifactId>
+    </dependency>
+</dependencies>
+```
+
+由于节点有多个，可以保存在一个集合中，因此这里的配置文件使用YAML格式的
+
+```yaml
+spring:
+  redis:
+    cluster:
+      ports:
+        - 8001
+        - 8002
+        - 8003
+        - 9001
+        - 9002
+        - 9003
+      host: 127.0.0.1
+      poolConfig:
+        max-total: 8
+        max-idle: 8
+        max-wait-millis: -1
+        min-idle: 0
+```
+
+由于Redis实例的host都是一样的，因此这里配置了一个host；而port配置成了一个集合；这些port都将被注入一个集合中，poolConfig则是基本的连接池信息配置；
+
+创建RedisConfig，完成对Redis的配置；
+
+```java
+@Data
+@Configuration
+@ConfigurationProperties("spring.redis.cluster")
+public class RedisConfig {
+    List<Integer> ports;
+    String host;
+    JedisPoolConfig poolConfig;
+
+    @Bean
+    RedisClusterConfiguration redisClusterConfiguration() {
+        RedisClusterConfiguration configuration = new RedisClusterConfiguration();
+        List<RedisNode> nodes = new ArrayList<>();
+        for (Integer port : ports) {
+            nodes.add(new RedisNode(host, port));
+        }
+        configuration.setPassword(RedisPassword.of("123456"));
+        configuration.setClusterNodes(nodes);
+        return configuration;
+    }
+
+    @Bean
+    JedisConnectionFactory jedisConnectionFactory() {
+        return new JedisConnectionFactory(redisClusterConfiguration(), poolConfig);
+    }
+
+    @Bean
+    RedisTemplate redisTemplate() {
+        RedisTemplate redisTemplate = new RedisTemplate();
+        redisTemplate.setConnectionFactory(jedisConnectionFactory());
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        redisTemplate.setValueSerializer(new JdkSerializationRedisSerializer());
+        return redisTemplate;
+    }
+
+    @Bean
+    StringRedisTemplate stringRedisTemplate() {
+        StringRedisTemplate stringRedisTemplate = new StringRedisTemplate(jedisConnectionFactory());
+        stringRedisTemplate.setKeySerializer(new StringRedisSerializer());
+        stringRedisTemplate.setValueSerializer(new StringRedisSerializer());
+        return stringRedisTemplate;
+    }
+}
+```
+
+代码解释：
+
+* 通过@ConfigurationProperties注解声明配置文件前缀，配置文件中定义的ports数组、host以及连接池配置信息都将被注入port、host、poolConfig三个属性中；
+* 配置RedisClusterConfiguration实例，设置Redis登陆密码以及Redis节点信息；
+* 根据RedisClusterConfiguration实例以及连接池配置信息创建Jedis连接工厂JedisConnectionFactory
+* 根据JedisConnectionFactory创建RedisTemplate和StringRedisTemplate，同时配置Key和Value的序列化方式，有了RedisTemplate和StringRedisTemplate，剩下的用法就和单实例的用法一致；
+
+创建Controller和entity；略；
+
+测试，启动项目，在浏览器中访问  `http://localhost/test`
+
+![](../images/spring boot + vue/redis集群控制台输出.png)
+
+### 6.2 整合MongoDB
+
+#### 6.2.1 MongoDB简介
+
+MongoDB 是一种面向文档的数据库管理系统，它是一个介于关系型数据库和非关系型数据库之间的产品， MongoDB 功能丰富，它支持一种类似 JSON 的 BSON 数据格式，既可以存储简单的数据格式， 也可以存储复杂的数据类型。 MongoDB 最大的特点是它支持的查询语言非常强大，并且还支持对数据建立索引。总体来说， MongoDB 是一款应用相当广泛的 NoSQL 数据库。
+
+#### 6.2.2 MongoDB安装
+
+下载并解压mongoDB；进入mongodb目录，创建data与logs目录
+
+进入bin目录下，创建一个新的MongoDB配置文件mongo.conf
+
+```properties
+dbpath=/data/mongoDB/mongodb/data
+logpath=/data/mongoDB/mongodb/logs
+port=27017
+fork=true
+```
+
+配置解释：
+
+* 第 1 行配直表示数据存储目录。
+* 第 2 行自己直表示日志文件位直。
+* 第 3 行配直表示启动端口。
+* 第 4 行配直表示以守护程序的方式启动 MongoDB，即九许 MongoDB 在后台运行。
+
+**MongoDB的启动和关闭**
+
+配置完成后执行如下命令启动MongoDB
+
+```powershell
+./mongod -f mongo.conf --bind_ip_all
+```
+
+`-f`表示指定配置文件的位置，`-- bind_ip_all` 则表示允许所有的远程地址连接该 MongoDB 实例。 MongoDB 启动成功后，在 bin 目录下再执行 mongo 命令，进入 MongoDB 控制台，然后输入`db.version()`，如果能看到 MongoDB 的版本号， 就表示安装成功：
+
+```powershell
+> db.version()
+4.0.18
+```
+
+默认情况下，启动后连接的是 MongoDB 中的 test 库，而关闭MongoDB 的命令需要在 admin 库中执行，因此关闭 MongoDB 需要首先切换到 admin 库， 然后执行 `db.shutdownServer()`命令，完整操作步骤如下：
+
+```powershell
+> use admin
+switched to db admin
+> db.shutdownServer()
+2020-05-25T00:56:56.866+0800 I NETWORK  [js] DBClientConnection failed to receive message from 127.0.0.1:27017 - HostUnreachable: Connection closed by peer
+server should be down...
+2020-05-25T00:56:56.870+0800 I NETWORK  [js] trying reconnect to 127.0.0.1:27017 failed
+2020-05-25T00:56:56.870+0800 I NETWORK  [js] reconnect 127.0.0.1:27017 failed failed
+> exit
+bye
+2020-05-25T00:57:14.597+0800 I NETWORK  [js] trying reconnect to 127.0.0.1:27017 failed
+2020-05-25T00:57:14.598+0800 I NETWORK  [js] reconnect 127.0.0.1:27017 failed failed
+2020-05-25T00:57:14.598+0800 I QUERY    [js] Failed to end session { id: UUID("eed9fa0f-29c8-434b-8c59-e57dc60fd1ce") } due to SocketException: socket exception [CONNECT_ERROR] server [couldn't connect to server 127.0.0.1:27017, connection attempt failed: SocketException: Error connecting to 127.0.0.1:27017 :: caused by :: Connection refused]
+```
+
+服务关闭后，执行 exit 命令退出控制台， 此时如果再执行 `./mongo` 命令就会执行失败
+
+```powershell
+MongoDB shell version v4.0.18
+connecting to: mongodb://127.0.0.1:27017/?gssapiServiceName=mongodb
+2020-05-25T00:57:49.624+0800 E QUERY    [js] Error: couldn't connect to server 127.0.0.1:27017, connection attempt failed: SocketException: Error connecting to 127.0.0.1:27017 :: caused by :: Connection refused :
+connect@src/mongo/shell/mongo.js:344:17
+@(connect):2:6
+exception: connect failed
+```
+
