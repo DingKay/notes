@@ -4176,3 +4176,101 @@ connect@src/mongo/shell/mongo.js:344:17
 exception: connect failed
 ```
 
+**安全管理**
+
+默认情况下，启动的MongoDB没有登陆密码，在生产环境中这是非常不安全的，但是不同于MySQL、Oracle等关系型数据库，MongoDB中每一个库都有独立的密码，在哪一个库中创建用户就要在哪个库中验证密码，要配置密码，首先要创建一个用户。例如在admin库中创建一个用户
+
+```powershell
+> use admin;
+switched to db admin
+> db.createUser({user:"dingkay",pwd:"123456",roles:[{role:"readWrite",db:"test"}]})
+Successfully added user: {
+        "user" : "dingkay",
+        "roles" : [
+                {
+                        "role" : "readWrite",
+                        "db" : "test"
+                }
+        ]
+}
+```
+
+新创建的用户名为dingkay，密码是123456，roles表示该用户具有的角色，这里的配置表示该用户对test库具有读和写两项权限。
+
+用户创建成功后，关闭当前实例，然后重新启动，启动命令如下；
+
+```powershell
+./mongod -f mongo.conf --auth --bind_ip_all
+```
+
+启动成功后，再次进入控制台，然后切换到admin库中验证登陆（默认连接上的是test库）验证成功后就可以对test库执行读写操作了
+
+```powershell
+> db.auth("dingkay","123456")
+1
+```
+
+如果db.auth()命令执行结果为1，就表示认证成功。
+
+#### 6.2.3 整合Spring Boot
+
+借助于Spring Data MongoDB，Spring Boot为MongoDB也提供了开箱即用的自动化配置方案
+
+1. 创建Spring Boot工程
+
+创建Spring Boot Web工程，添加MongoDB依赖
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-mongodb</artifactId>
+    </dependency>
+</dependencies>
+```
+
+2. 配置MongoDB
+
+在application.properties中配置MongoDB的连接信息
+
+```properties
+spring.data.mongodb.authentication-database=admin
+spring.data.mongodb.database=test
+spring.data.mongodb.host=127.0.0.1
+spring.data.mongodb.port=27017
+spring.data.mongodb.username=dingkay
+spring.data.mongodb.password=123456
+```
+
+代码解释：
+
+* 第一行配置表示验证登陆信息的库
+* 第二行配置表示要连接的库，认证信息不一定要在连接的库中创建，因此这两个分开配置。
+* 第三行~第六行配置表示MongoDB的连接地址和认证信息等。
+
+3. 创建实体类
+
+```java
+@Data
+public class Book {
+    private String author;
+    private String name;
+    private float price;
+}
+```
+
+4. 创建BookDao
+
+```java
+public interface BookDao extends MongoRepository<Book, Integer> {
+    List<Book> findByAuthorContains(String author);
+    Book findByNameEquals(String name);
+}
+```
+
+MongoRepository中已经预定了针对实体类的查询、添加、删除等操作。BookDao中可以按照5.3节提到的命名规则定义查询方法。
+
