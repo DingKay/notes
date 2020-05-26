@@ -4274,3 +4274,39 @@ public interface BookDao extends MongoRepository<Book, Integer> {
 
 MongoRepository中已经预定了针对实体类的查询、添加、删除等操作。BookDao中可以按照5.3节提到的命名规则定义查询方法。
 
+5. 创建Controller
+
+```java
+@RestController
+public class BookController {
+    @Autowired
+    MongoDao mongoDao;
+
+    @GetMapping("/test")
+    public void test() {
+        List<Book> books = new ArrayList<>();
+        Book book = new Book();
+        book.setName("朝花夕拾");
+        book.setAuthor("鲁迅");
+        book.setPrice(21.5F);
+        books.add(book);
+        book = new Book();
+        book.setName("呐喊");
+        book.setAuthor("鲁迅");
+        book.setPrice(26.0F);
+        books.add(book);
+        mongoDao.insert(books);
+        List<Book> bookList = mongoDao.findByAuthorContains("鲁迅");
+        System.out.println("bookList = " + bookList);
+        Book bookObj = mongoDao.findByNameEquals("呐喊");
+        System.out.println("bookObj = " + bookObj);
+    }
+}
+```
+
+代码解释：
+
+* 调用MongoRepository中的insert方法插入集合数据
+* findByAuthorContains查询作者名中包含"鲁迅"的数据
+* findByNameEquals查询书名为呐喊的数据
+
