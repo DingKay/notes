@@ -4310,3 +4310,138 @@ public class BookController {
 * findByAuthorContains查询作者名中包含"鲁迅"的数据
 * findByNameEquals查询书名为呐喊的数据
 
+登录MongoDB服务器，认证身份后，可以查询到数据
+
+![](../images/spring boot + vue/登录mongodb查看book数据.png)
+
+6. 使用MongoTemplate
+
+除了继承MongoRepositorty，Spring Data MongoDB还提供了MongoTemplate用来方便的操作MongoDB。相关配置在MongoDataAutoConfiguration类中。
+
+```java
+@Data
+public class BookA {
+    private Integer id;
+    private String name;
+    private String author;
+    private Float price;
+}
+@RestController
+public class BookController {
+    @Autowired
+    MongoTemplate mongoTemplate;
+
+    @GetMapping("/mongo")
+    public void mongo() {
+        List<BookA> books = new ArrayList<>();
+        BookA book = new BookA();
+        book.setId(1);
+        book.setName("围城");
+        book.setAuthor("钱钟书");
+        book.setPrice(25.5F);
+        books.add(book);
+        book = new BookA();
+        book.setId(2);
+        book.setName("宋诗选注");
+        book.setAuthor("钱钟书");
+        book.setPrice(24.5F);
+        books.add(book);
+        mongoTemplate.insertAll(books);
+        List<BookA> all = mongoTemplate.findAll(BookA.class);
+        System.out.println("all = " + all);
+        BookA byId = mongoTemplate.findById(2, BookA.class);
+        System.out.println("byId = " + byId);
+    }
+}
+```
+
+### 6.3 Session共享
+
+![](../images/spring boot + vue/Session共享.png)
+
+正常情况下，HttpSession是通过Servlet容器创建并存储在内存中的，如果需要对项目进行横向扩展搭建集群时，那么可以利用硬件或者软件来做负载均衡，此时来自同一用户的HTTP请求就有可能被分散到不同的实例上去，如何保证各个实例之间的Session同步就成为一个必须解决的问题。Spring Boot提供了自动化Session共享配置，它结合Redis可以非常方便地解决这个问题，使用Redis解决Session共享问题的原理非常简单，就是把原本存储在不同服务器上的Session拿出来存储在一个独立的服务器上。
+
+当一个请求到达Nginx 服务器后，首先进行请求分发，假设请求被 real server 1 处理了， real server 1 在处理请求时，无论是存储 Session 还是读取 Session， 都去操作 Session 服务器而不是操作自身内存中的 Session，其他 real server 在处理请求时也是如此，这样就可以实现 Session 共享了。
+
+#### 6.3.1 Session 共享配置
+
+创建Spring Boot项目，添加依赖
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-redis</artifactId>
+        <exclusions>
+            <exclusion>
+                <groupId>io.lettuce</groupId>
+                <artifactId>lettuce-core</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+    <dependency>
+        <groupId>redis.clients</groupId>
+        <artifactId>jedis</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.session</groupId>
+        <artifactId>spring-session-data-redis</artifactId>
+    </dependency>
+</dependencies>
+```
+
+除了Redis依赖之外，这里还要提供spring-session-data-redis依赖，Spring Session可以做到透明化的替换掉应用的Session容器，项目创建成功后，在application.yml中进行基本的redis配置
+
+```yaml
+spring:
+  redis:
+    host: 127.0.0.1
+    port: 11080
+    password: 123456
+    database: 0
+    jedis:
+      pool:
+        max-active: 8
+        max-idle: 8
+        max-wait: -1
+        min-idle: 0
+```
+
+创建一个Controller用来测试操作
+
+```java
+@RestController
+public class HelloController {
+    @Value("${server.port}")
+    String port;
+    @PostMapping("/save")
+    public String saveName(String name, HttpSession session) {
+        session.setAttribute("name", name);
+        return port;
+    }
+
+    @GetMapping("/get")
+    public String getName(HttpSession session) {
+        return port + ":" + session.getAttribute("name").toString();
+    }
+}
+```
+
+这里提供了两个方法，一个save接口用来向Session中存储数据，还有一个get接口用来从Session中获取数据，这里注入了项目启动的端口号server.port，主要是为了区分到底哪个服务器提供的服务，另外，虽然还是操作的HttpSession，但是实际上HttpSession容器已经被透明替换，真正的Session此时存储在Redis服务器上
+
+创建项目后，打成jar包，上传到服务器上，然后执行如下两条命令启动项目
+
+```powershell
+nohup java -jar chapter01-1.0-SNAPSHOT.jar --server.port=8080 &
+nohup java -jar chapter01-1.0-SNAPSHOT.jar --server.port=8081 &
+```
+
+nohup表示
