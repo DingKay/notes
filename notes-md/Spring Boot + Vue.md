@@ -3059,13 +3059,13 @@ spring:
       type: com.alibaba.druid.pool.DruidDataSource
       username: root
       password: 123456
-      url: jdbc:mysql:///chapter01?useUnicode=true&charactorEncoding=UTF-8
+      url: jdbc:mysql:///chapter01?useUnicode=true&characterEncoding=UTF-8
     ## 数据源2
     two:
       type: com.alibaba.druid.pool.DruidDataSource
       username: root
       password: 123456
-      url: jdbc:mysql:///chapter02?useUnicode=true&charactorEncoding=UTF-8
+      url: jdbc:mysql:///chapter02?useUnicode=true&characterEncoding=UTF-8
 ```
 
 配置两个数据源，区别主要是数据库不同
@@ -3323,11 +3323,11 @@ application.properties在多数据源原有的基础上再添加如下配置
 spring.datasource.one.password=123456
 spring.datasource.one.username=root
 spring.datasource.one.type=com.alibaba.druid.pool.DruidDataSource
-spring.datasource.one.url=jdbc:mysql:///chapter01?useUnicode=true&charactorEncoding=UTF-8
+spring.datasource.one.url=jdbc:mysql:///chapter01?useUnicode=true&characterEncoding=UTF-8
 spring.datasource.two.password=123456
 spring.datasource.two.username=root
 spring.datasource.two.type=com.alibaba.druid.pool.DruidDataSource
-spring.datasource.two.url=jdbc:mysql:///chapter02?useUnicode=true&charactorEncoding=UTF-8
+spring.datasource.two.url=jdbc:mysql:///chapter02?useUnicode=true&characterEncoding=UTF-8
 ## 新增jpa配置
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL57InnoDBDialect
 spring.jpa.hibernate.ddlAuto=update
@@ -4444,4 +4444,187 @@ nohup java -jar chapter01-1.0-SNAPSHOT.jar --server.port=8080 &
 nohup java -jar chapter01-1.0-SNAPSHOT.jar --server.port=8081 &
 ```
 
-nohup表示
+nohup表示不挂断程序运行，即当终端窗口关闭后，程序依然在后台运行，最后的&表示让程序在后台运行。`--server.port`表示设置启动端口，一个为8080，另一个为8081。启动成功后，接下来就可以配置负载均衡了。
+
+#### 6.3.2 Nginx负载均衡
+
+安装Nginx
+
+下载源码并解压，然后进入解压目录进行编译安装
+
+```powershell
+./configure --prefix=xxx
+make
+make install
+```
+
+安装过程中的异常可能是因为缺少依赖环境
+
+> pcre/zlib/openssl/g++(ubuntu)
+
+安装成功后，进入自定义安装配置的prefix中的路径，执行sbin目录下的nginx文件启动nginx
+
+启动成功后，默认端口是80，可以直接访问查看
+
+然后修改nginx的配置文件
+
+```
+    upstream dingkay.com {
+    server 127.0.0.1:8080 weight=1;
+    server 127.0.0.1:8081 weight=1;
+    }
+
+    server {
+        listen       80;
+        server_name  localhost;
+
+        #charset koi8-r;
+
+        #access_log  logs/host.access.log  main;
+
+        location / {
+            proxy_pass http://dingkay.com;
+            proxy_redirect default;
+        }
+```
+
+> 这里只列出了修改的配置，在修改的配置中首先配置上游服务器，即两个real server，两个real server的权重都是1，意味着请求将平均分配到两个real server上，然后在server中配置拦截规则，将拦截到的请求转发到定义好的real server上
+
+配置完成后，重启Nginx
+
+```powershell
+./nginx -s reload
+```
+
+#### 6.3.3 请求分发
+
+当服务和Nginx都启动后，调用save接口
+
+![](../images/spring boot + vue/请求分发save.png)
+
+调用的端口是80，即调用的是Nginx服务器，请求会被Nginx转发到real server上进行处理，返回值为8081，说明真正处理请求的是8081那台服务器，接下来调用get获取数据
+
+![](../images/spring boot + vue/请求分发get.png)
+
+调用的端口依然是80，但是返回值是8080，说明是8080这台服务器提供的服务。
+
+## 7.0 构建RESTful服务
+
+### 7.1 REST简介
+
+REST(Representational State Transfer) 是一种Web软件架构风格，它是一种风格，而不是标准，匹配或兼容这种架构风格的网络服务称为REST服务。REST服务简洁并且有层次，REST通常基于HTTP、URI和XML以及HTML这些现有的广泛流行的协议和标准。在REST中，资源是由URI来指定的，对资源的增删改查操作可以通过HTTP协议提供的GET、POST、PUT、DELETE等方法实现。使用REST可以更高效的利用缓存来提高响应速度，同时REST中的通信会话状态由客户端来维护，这可以让不同的服务器处理一系列请求中的不同请求，进而提高服务器的扩展性。在前后端分离项目中，一个设计良好的Web软件架构必然要满足REST风格。
+
+在Spring MVC框架中，开发者可以通过@RestController注解开发一个RESTful服务，不过，Spring Boot对此提供了自动化配置方案。
+
+### 7.2 JPA实现REST
+
+在Spring Boot中，使用Spring Data JPA和Spring Data Rest可以快速开发出一个RESTful应用。
+
+#### 7.2.1 基本实现
+
+1. 创建项目
+
+添加所需依赖
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>druid</artifactId>
+        <version>1.1.9</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-rest</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+</dependencies>
+```
+
+这里的依赖除了数据库相关的依赖外，还有Spring Data JPA的依赖以及Spring Data Rest的依赖。项目创建完成后，在application.properties中配置基本的数据库连接信息
+
+```properties
+spring.datasource.username=root
+spring.datasource.password=123456
+spring.datasource.url=jdbc:mysql:///jparestful?useUnicode=true&characterEncoding=utf-8
+spring.datasource.type=com.alibaba.druid.pool.DruidDataSource
+spring.jpa.show-sql=true
+spring.jpa.database=mysql
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL57Dialect
+```
+
+2. 创建实体类
+
+```java
+@Data
+@Entity(name = "t_book")
+public class Book {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+    private String name;
+    private String author;
+}
+```
+
+3. 创建BookRepository
+
+```java
+public interface BookRepository extends JpaRepository<Book, Integer> {
+}
+```
+
+创建BookRepository类继承JpaRepository，JpaRepository中默认提供了一些基本操作方法
+
+```java
+@NoRepositoryBean
+public interface JpaRepository<T, ID> extends PagingAndSortingRepository<T, ID>, QueryByExampleExecutor<T> {
+    List<T> findAll();
+
+    List<T> findAll(Sort var1);
+
+    List<T> findAllById(Iterable<ID> var1);
+
+    <S extends T> List<S> saveAll(Iterable<S> var1);
+
+    void flush();
+
+    <S extends T> S saveAndFlush(S var1);
+
+    void deleteInBatch(Iterable<T> var1);
+
+    void deleteAllInBatch();
+
+    T getOne(ID var1);
+
+    <S extends T> List<S> findAll(Example<S> var1);
+
+    <S extends T> List<S> findAll(Example<S> var1, Sort var2);
+}
+```
+
+从源码可以看出来，基本的增删改查、分页都提供了
+
+4. 测试
+
+经过如上几步，一个RESTful的服务就构成了，使用Postman测试
+
+RESTful服务构建成功后，默认的请求路径是实体类名小写再加上后缀，此时向数据库添加一条数据非常容易，发起一个Post请求，请求地址为localhost:8080/books
+
+![](../images/spring boot + vue/RESTful插入book数据.png)
+
+5. 查询测试
+
