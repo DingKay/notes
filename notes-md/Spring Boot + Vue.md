@@ -4628,3 +4628,39 @@ RESTful服务构建成功后，默认的请求路径是实体类名小写再加�
 
 5. 查询测试
 
+查询请求是GET请求，分页查询的请求路径为/books
+
+![](../images/spring boot + vue/RESTful查询book数据.png)
+
+如果要根据id查询可以在请求后面加上id值
+
+```
+http://localhost:8080/books/2
+```
+
+分页查询数据，只需要在请求地址中携带上相关参数即可
+
+```
+http://localhost:8080/books?page=0&size=3
+```
+
+![](../images/spring boot + vue/RESTful分页查询book数据.png)
+
+分页查询的同时还可以根据id排序查询
+
+![](../images/spring boot + vue/RESTful分页查询book数据并排序.png)
+
+发送PUT请求，根据id修改数据
+
+![](../images/spring boot + vue/RESTful修改book数据.png)
+
+发送DELETE请求可以实现对数据的删除操作
+
+```
+http://localhost:8080/books/1
+```
+
+DELETE请求没有返回值，上面的这个请求发送成功后，id为1的记录就被删除了
+
+#### 7.2.2 自定义请求路径
+
