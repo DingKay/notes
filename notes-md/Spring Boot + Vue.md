@@ -4664,3 +4664,53 @@ DELETE请求没有返回值，上面的这个请求发送成功后，id为1的�
 
 #### 7.2.2 自定义请求路径
 
+默认情况下，请求路径为实体类名加小写s，如果开发者想对请求路径进行重定义，通过@RepositoryRestResource注解即可实现，下面的案例只需在BookRepository上添加@RepositoryRestResource注解即可
+
+```java
+@RepositoryRestResource(path = "bks", collectionResourceRel = "bk", itemResourceRel = "book")
+public interface BookRepository extends JpaRepository<Book, Integer> {
+}
+```
+
+path属性表示将所有的请求路径中的books都转换成bks，如localhost:8080/bks；collectionResourceRel属性表示返回JSON集合中的key修改为bk，itemResourceRel属性表示将返回的JSON集合中的单个book的key修改为book
+
+![](../images/spring boot + vue/RESTful自定义请求路径.png)
+
+#### 7.2.3 自定义查询方法
+
+默认的查询方法支持分页查询、排序查询以及按照id查询，如果需要自定义根据某个属性查询，只需要在BookRepository中定义相关方法并暴露出去即可
+
+```java
+@RepositoryRestResource(path = "bks", collectionResourceRel = "bk", itemResourceRel = "book")
+public interface BookRepository extends JpaRepository<Book, Integer> {
+    List<Book> findByAuthorContains(@Param("author") String author);
+    @RestResource(path = "name", rel = "name")
+    Book findByName(@Param("name") String name);
+}
+```
+
+代码解释：
+
+* 自定义查询只需要在BookRepository中定义相关查询方法即可，方法定义好之后可以不添加@RestResource注解，默认路径就是方法名，如果想要自定义路径，只需要添加@RestResource注解，path属性为最新路径，rel表示实体中映射的属性名
+* 直接访问localhost:8080/bks/search可以查看暴露了哪些查询方法
+
+![](../images/spring boot + vue/RESTful查看自定义查询.png)
+
+#### 7.2.4 隐藏方法
+
+默认情况下，凡是继承了Repository接口或者Repository的子类，都会被暴露出来，即开发者可执行基本的增删改查，如果继承了Repository但又不想暴露则可以在类或者方法加上@RepositoryRestResource/@RestResource的exported属性置为false；那么整个类/接口就会失效
+
+```java
+@RepositoryRestResource(path = "bks", collectionResourceRel = "bk", itemResourceRel = "book")
+public interface BookRepository extends JpaRepository<Book, Integer> {
+    List<Book> findByAuthorContains(@Param("author") String author);
+    @RestResource(path = "name", rel = "name")
+    Book findByName(@Param("name") String name);
+    @Override
+    @RestResource(exported = false)
+    Optional<Book> findById(Integer integer);
+}
+```
+
+#### 7.2.5 配置CORS
+
