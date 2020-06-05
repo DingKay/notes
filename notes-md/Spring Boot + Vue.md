@@ -4714,3 +4714,60 @@ public interface BookRepository extends JpaRepository<Book, Integer> {
 
 #### 7.2.5 配置CORS
 
+之前介绍了CORS两种不同的配置方式，一种是直接在方法上添加@CrossOrigin注解，另一种是全局配置，全局配置依然适用，但是默认的RESTful工程不需要开发者自己提供Controller，因此添加在Controller的方法上的注解可以直接写在BookRepository上。
+
+```java
+@CrossOrigin
+@RepositoryRestResource(path = "bks", collectionResourceRel = "bk", itemResourceRel = "book")
+public interface BookRepository extends JpaRepository<Book, Integer> {
+    @Override
+    @RestResource(exported = false)
+    Optional<Book> findById(Integer id);
+    @RestResource(path = "list")
+    List<Book> findBooksByAuthorContains(String author);
+}
+```
+
+此时BookRepository中的所有方法都支持跨域。如果只需要某一个方法支持跨域，那么将@CrossOrigin注解添加到某一个方法上即可。
+
+#### 7.2.6 其它配置
+
+开发者也可以在application.properties中配置一些常用属性
+
+```properties
+# 每页默认记录数，默认值为20
+spring.data.rest.default-page-size=2
+# 分页查询页码参数名，默认值为page
+spring.data.rest.page-param-name=page
+# 分页查询记录数参数名，默认值为size
+spring.data.rest.limit-param-name=size
+# 分页查询排序参数名，默认值为sort
+spring.data.rest.sort-param-name=sort
+# base-path 表示给所有请求路径都加上前缀
+spring.data.rest.base-path=/api
+# 添加成功时是否返回添加内容
+spring.data.rest.return-body-on-create=true
+# 更新成功时是否返回更新内容
+spring.data.rest.return-body-on-update=true
+```
+
+当然，这些配置也可以在Java代码中配置，且代码中配置的优先级高于application.properties配置的优先级
+
+```java
+@Configuration
+public class RestConfig extends RepositoryRestConfigurerAdapter {
+    @Override
+    public void configureRepositoryRestConfiguration(RepositoryRestConfiguration config) {
+        config.setBasePath("/api")
+                .setDefaultPageSize(2)
+                .setLimitParamName("size")
+                .setPageParamName("page")
+                .setSortParamName("sort")
+                .setReturnBodyOnCreate(true)
+                .setReturnBodyOnUpdate(true);
+    }
+}
+```
+
+### 7.3 MongoDB实现REST
+
