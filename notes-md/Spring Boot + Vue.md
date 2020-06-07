@@ -4771,3 +4771,229 @@ public class RestConfig extends RepositoryRestConfigurerAdapter {
 
 ### 7.3 MongoDB实现REST
 
+创建项目，添加依赖
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-mongodb</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-rest</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+</dependencies>
+```
+
+创建实体类
+
+```java
+@Data
+public class Book {
+    private Integer id;
+    private String author;
+    private String name;
+}
+```
+
+创建BookRepository
+
+```java
+public interface BookRepository extends MongoRepository<Book, Integer> {
+}
+```
+
+配置MongoDB连接信息
+
+```properties
+spring.data.mongodb.password=123456
+spring.data.mongodb.username=dingkay
+spring.data.mongodb.port=27017
+spring.data.mongodb.host=127.0.0.1
+spring.data.mongodb.database=test
+spring.data.mongodb.authentication-database=admin
+```
+
+如此之后，一个RESTful服务就搭建成功了；
+
+## 8.0 开发者工具与单元测试
+
+### 8.1 devtools简介
+
+Spring Boot中提供了一组开发工具spring-boot-devtools，可以提高开发者的工作效率，开发者可以将该模块包含在任何项目中，spring-boot-devtools最方便的地方莫过于热部署了。
+
+### 8.2 devtools实战
+
+#### 8.2.1 基本用法
+
+只需要添加相关依赖即可
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-devtools</artifactId>
+    <optional>true</optional>
+</dependency>
+```
+
+> 这里多了一个optional选项，是为了防止将devtools依赖传递到其他模块中，当开发者将应用打包运行后，devtools会被自动禁用。
+
+当引入项目依赖后，只要classpath路径下的文件发生了变化，项目就会自动重启，这极大地提高了项目的开发速度。如果开发者使用了Eclipse，那么在修改完代码并保存后，项目将自动编译并出发重启，而如果使用了Intellij IDEA，默认情况下，需要开发者手动编译才会出发重启。手动编译时，单机Build -> Build Project菜单或者按Ctrl + F9 快捷键进行编译，编译成功后就会触发项目重启。当然，使用Intellij IDEA的开发者也可以配置项目自动编译，步骤如下；
+
+单击File -> Settings 菜单，打开Settings 页面，在左边的菜单栏找到Build，Execution，Deployment -> Compile，勾选Build project automatically
+
+![](../images/spring boot + vue/IDEA自动编译.png)
+
+按Ctrl + Shift + Alt + / 快捷键，调出Maintenance界面
+
+![](../images/spring boot + vue/Maintenance界面.png)
+
+单击Registry，在新打开的Registry页面中，勾选compiler.automake.allow.when.app.running复选框
+
+
+
+做完这两部配置后，若开发者再次在Intellij IDEA中修改代码，则项目会自动重启。
+
+> classpath路径下的静态资源或者视图模板等变化时，并不会导致项目重启
+
+![](../images/spring boot + vue/Registry界面.png)
+
+#### 8.2.2 基本原理
+
+Spring Boot中使用的自动重启技术涉及两个类加载器，一个是baseclassloader，用来加载不会变化的类，例如第三方的jar；另一个是restartclassloader，用来加载开发者自己写的会变化的类，当项目需要重启时，restartclassloader将被一个新创建的类加载器代替，而baseclassloader则继续使用原来的，这种启动方式要比冷启动快很多，因为baseclassloader已经存在并且已经加载好。
+
+#### 8.2.3 自定义监控资源
+
+默认情况下，/META-INF/maven、/META-INF/resources、/resources、/static、/public以及/templates位置下资源的变化并不会触发重启，如果开发者想要对这些位置进行重定义，在application.properties中添加如下配置即可；
+
+```properties
+spring.devtools.restart.exclude=static/**
+```
+
+这表示从默认的不处罚重启的目录中除去static目录，即classpath:static 目录下的资源发生变化时也会导致项目重启。用户也可以反配置需要监控的目录，配置方式如下：
+
+```properties
+spring.devtools.restart.additional-path=stc/main/resources/startic
+```
+
+这个配置表示当src/main/resources/static目录下的文件发生变化时，自动重启项目。
+
+由于项目的编码过程是一个连续的过程，并不是每修改一行代码就要重启项目，这样不仅浪费电脑性能，而且没有实际意义。鉴于这种情况，开发者也可以考虑使用出发文件，出发文件是一个特殊的文件，当这个文件发生变化时就会重启
+
+```properties
+spring.devtools.restart.trigger-file=.trigger-file
+```
+
+在项目resources目录下创建一个名为.trigger-file的文件，此时当开发者修改代码时，默认情况下项目不会重启，需要项目重启时，开发者只需要修改.trigger-file文件即可。但是注意，如果项目没有改变，只是单纯的修改了.trigger-file文件，那么项目不会重启。
+
+#### 8.2.4 使用LiveReload
+
+上一小节介绍了静态资源目录下的文件变化以及模板文件的变化不会引发重启，虽然开发者可以通过修改配置改变这一默认情况，但实际上并没有必要，因为静态文件不是class，devtools默认嵌入了LiveReload服务器，可以解决静态文件的热部署，LiveReload可以在资源发生变化时自动触发浏览器更新，LiveReload支持Chrome、Firefox以及Safari。以Chrome为例，在Chrome应用商店搜索LiveReload
+
+在浏览器中打开项目的页面，然后单击浏览器右上角的LiveReload按钮，开启LiveReload连接，此时当静态资源发生改变时，浏览器就会自动加载。如果开发者不想使用这个特性，可以通过以下配置关闭
+
+```properties
+spring.devtools.livereload.enabled=false
+```
+
+> 建议开发者使用LiveReload策略而不是项目重启策略来实现静态资源的动态加载，因为项目重启所耗费的时间一般要超过LiveReload
+
+#### 8.2.5 禁用自动重启
+
+如果开发者添加了spring-boot-devtools依赖，但是不想使用自动重启特性，那么可以通过配置关闭自动重启
+
+```properties
+spring.devtools.restart.enabled=false
+```
+
+也可以在Java代码中配置禁止自动重启，配置方式如下
+
+```java
+@SpringBootApplication
+public class App {
+    public static void main(String[] args) {
+        System.setProperty("spring.devtools.restart.enabled", "false");
+        SpringApplication.run(App.class, args);
+    }
+}
+```
+
+#### 8.2.6 全局配置
+
+如果项目模块众多，开发者可以在当前用户目录下创建`.spring-boot-devtools.properties`文件来对devtools进行全局配置，这个配置文件适用于当前计算机上任何使用了devtools模块的Spring Boot项目。
+
+```properties
+spring.devtools.restart.trigger-file=.trigger-file
+```
+
+此时，就实现了使用触发文件触发项目重启。
+
+### 8.3 单元测试
+
+在本书前面的章节中，遇到需要测试的地方都是创建一个Controller进行测试，这样操作臃肿，效率低下，在Spring Boot中使用单元测试可以实现对每一个环节的代码进行测试。Spring Boot中的单元测试与Spring中的测试一脉相承，但是又做了大量的简化，只需要少量的代码就能搭建一个测试环境，进而实现对Controller、Service或者Dao层的代码进行测试。
+
+#### 8.3.1 基本用法
+
+创建一个项目引入spring-boot-starter-test依赖，并且创建好了测试类、
+
+```java
+@RunWith(SpringRunner.class)
+@SpringBootTest
+public class Test01 {
+    @Test
+    public void contextLoads() {}
+}
+```
+
+代码解释：
+
+* 这里首先使用了@RunWith注解，该注解将JUnit执行类修改为SpringRunner，而SpringRunner是Spring Framework中测试类SpringJUnit4ClassRunner的别名。
+
+* @SpringBootTest注解提供了SpringTestContext中的常规测试功能之外，还提供了其他特性：提供默认的ContextLoader、自动搜索@SpringBootConfiguration、自定义环境属性、为不同的webEnvironment模式提供支持，这里的webEnvironment模式主要有四种：
+
+  MOCK，这种模式是当classpath下存在servletAPIS时，就会创建WebApplicationContext并提供一个mockservlet环境；当classpath下存在Spring WebFlux时，则创建ReactiveWebApplicationContext；若都不存在，则创建一个常规的ApplicationContext。
+
+  RANDOM_PORT，这种模式将提供一个真实的Servlet环境，使用内嵌的容器，但是端口随机。
+
+  DEFINED_PORT，这种模式也将提供一个真实的Servlet环境，使用内嵌的容器，但是使用定义好的端口。
+
+  NONE，这种模式则加载一个普通的ApplicationContext，不提供任何Servlet环境。这种一般不适用于Web测试。
+
+* 在Spring测试中，开发者一般使用@ContextConfiguration(classes = )或者@ContextConfiguration(locations = )来指定要加载的Spring配置，而在Spring Boot中则不需要这么麻烦，Spring Boot中的@*Test注解将会去包含测试类包下查找带有@SpringBootApplication或者@SpringBootConfiguration注解的主配置类。
+
+* Junit中的@After、@AfterClass、@Before、@BeforClass、@Ignore等注解一样可以在这里使用。
+
+#### 8.3.2 Service测试
+
+Service层的测试就是常规测试，非常容易，例如现在有一个HelloService如下
+
+```java
+@Service
+public class HelloService {
+    public String sayHello(String name) {
+        return "Hello " + name + "!";
+    }
+}
+```
+
+需要对HelloService进行测试，直接在测试类中注入HelloService即可；（测试类需要和启动类统一包下或其子包中）
+
+```java
+@RunWith(SpringRunner.class)
+@SpringBootTest
+public class TestHelloService {
+    @Autowired
+    HelloService helloService;
+    @Test
+    public void contextLoads() {
+        String hello = helloService.sayHello("Ding");
+        Assert.assertThat(hello, Matchers.is("Hello Ding!"));
+    }
+}
+```
+
