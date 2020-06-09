@@ -4997,3 +4997,68 @@ public class TestHelloService {
 }
 ```
 
+#### 8.3.3 Controller测试
+
+Controller测试则要使用Mock测试，即对一些不易获取的对象采用虚拟的对象来创建而方便进行测试。而Spring中提供的MockMvc则提供了对HTTP请求的模拟，使开发者能够在不依赖网络环境的情况下实现对Controller的快速测试
+
+```java
+@RestController
+public class HelloController {
+    @GetMapping("/hello")
+    public String hello(String name) {
+        return "Hello " + name + " !";
+    }
+
+    @PostMapping("/book")
+    public String addBook(@RequestBody Book book) {
+        return book.toString();
+    }
+}
+```
+
+对Controller进行测试需要借助Mock，代码如下；
+
+```java
+@RunWith(SpringRunner.class)
+@SpringBootTest
+public class HelloControllerTest {
+    @Autowired
+    WebApplicationContext wac;
+    MockMvc mockMvc;
+    @Before
+    public void before() {
+        mockMvc = MockMvcBuilders.webAppContextSetup(wac).build();
+    }
+    @Test
+    public void test1() throws Exception {
+        MvcResult mvcResult = mockMvc.perform(
+                MockMvcRequestBuilders
+                .get("/hello")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .param("name", "Ding"))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andDo(MockMvcResultHandlers.print())
+                .andReturn();
+        System.out.println(mvcResult.getResponse().getContentAsString());
+        Assert.assertThat(mvcResult.getResponse().getContentAsString(), Matchers.is("Hello Ding !"));
+    }
+    @Test
+    public void test2() throws Exception {
+        ObjectMapper om = new ObjectMapper();;
+        Book book = new Book();
+        book.setAuthor("罗贯中");
+        book.setName("三国演义");
+        book.setId(1);
+        String s = om.writeValueAsString(book);
+        MvcResult mvcResult = mockMvc.perform(
+                MockMvcRequestBuilders
+                .post("/book")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(s))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andReturn();
+        System.out.println(mvcResult.getResponse().getContentAsString());
+    }
+}
+```
+
