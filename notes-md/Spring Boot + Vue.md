@@ -5309,8 +5309,9 @@ public class BookDao {
 
 代码解释：
 
-* 
-* 
+* 自定义MyKeyGenerator实现KeyGenerator接口，然后实现该接口中的generate方法，该方法的三个参数分别是当前对象、当前请求的方法以及方法的参数，开发者可根据这些信息组成一个新的key返回，返回值就是缓存的key。@Cacheable注解中引用MyKeyGenerator实例即可
+* @CachePut注解一般用于数据更新方法上，与@Cacheable注解不同，添加了@CachePut注解的方法每次再执行时都不会检查缓存中是否存在数据，而是直接执行方法，然后将方法的执行结果缓存起来，如果该key对应的数据已经被缓存，就会覆盖之前的数据，这样可以避免再次加载数据时获取到脏数据。同时，@CachePut具有和@Cacheable类似的属性
+* @CacheEvict注解一般用于删除方法上，表示移除一个key对应的缓存。@CacheEvict注解有两个特殊的属性：allEntries和beforeInvocation，其中allEntries表示是否将所有缓存数据都删除，默认为false；beforeInvocation表示是否再方法执行前移除缓存中的数据，默认为false，即在方法执行后移除缓存中的数据。
 
 5. 创建测试类
 
@@ -5348,4 +5349,16 @@ updateBookById
 test:after updateBookById getBookById.book = Book(id=1, name=三国演义change, author=罗贯中change)
 getBookByIdWithMyKeyGenerator
 ```
+
+一开始执行了两次查询，但是查询方法只打印了一次，因为第二次使用了缓存，接下来执行删除方法，删除方法执行后再次执行查询，查询方法又被执行了，因为删除方法中缓存已经被删除了。接下来执行更新方法，更新方法中不仅更新数据，也更新了缓存，所以最后的查询方法中，查询方法没有打印日志，说明该方法没有执行，而是使用了缓存中的数据，而缓存中的数据已经被更新了。
+
+### 9.2 Reids缓存
+
+和Ehcache一样，如果在classpath下存在Redis并且Redis已经配置好了，此时默认就会使用RedisCacheManager作为缓存提供者，Redis单机使用步骤如下：
+
+1. 创建项目，添加spring-boot-starter-cache依赖和redis依赖
+
+
+
+
 
