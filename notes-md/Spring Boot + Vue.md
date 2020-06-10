@@ -5062,3 +5062,290 @@ public class HelloControllerTest {
 }
 ```
 
+代码解释：
+
+* @before表示在Test类之前执行，注入了一个WebApplicationContext用来模拟ServletContext环境，声明了一个MockMvc对象，并在每个测试方法执行前进行进行MockMvc的初始化操作
+* 调用MockMvc中的perform方法开启一个RequestBuilder请求，具体的请求则通过MockMvcRequestBuilders进行构建，调用MockMvcRequestBuilders中的get方法表示发起一个GET请求，调用post方法则发起一个POST请求，其它的DELETE和PUT请求也是一样，最后通过调用param方法设置请求参数
+* 添加返回验证规则，利用MockMvcResultMatchers进行验证，这里表示验证响应码是否为200
+* test2方法演示了POST请求如何传递JSON数据，首先将一个book对象转换为JSON，然后设置请求的contentType为APPLICATION_JSON，最后设置content为上传的JSON即可。
+
+除了MockMvc这种测试方式之外，Spring Boot还专门提供了TestRestTemplate用来实现集成测试，若开发者使用了@SpringBootTest注解，则TestRestTemplate将自动可用，直接在测试类中注入即可。主要，要使用TestRestTemplate进行测试，需要将SpringBootTest注解中的webEnvironment属性的默认值由WebEnvironment.MOCK修改为WebEnvironment.DEFINED_PORT或者WebEnvironment.RANDOM_PORT，因此这两种都是使用一个真实的Servlet环境而不是模拟的Servlet环境
+
+```java
+@RunWith(SpringRunner.class)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
+public class HelloControllerDefinedPortTest {
+    @Autowired
+    TestRestTemplate testRestTemplate;
+    @Test
+    public void test3() {
+        String name = "Ding";
+        ResponseEntity<String> hello = testRestTemplate.getForEntity("/hello?name={0}", String.class, name);
+        System.out.println("hello = " + hello.getBody());
+        Assert.assertThat(hello.getBody(), Matchers.is(name));
+    }
+}
+```
+
+#### 8.3.4 JSON测试
+
+开发者可以使用@JsonTest测试JSON序列化和反序列化是否工作正常，该注解将自动配置Jackson ObjectMapper、@JsonComponent以及Jackson Modules。如果开发者使用Gson代替Jackson，该注解将配置Gson；具体代码如下
+
+```java
+@RunWith(SpringRunner.class)
+@JsonTest
+public class BookJsonTest {
+    @Autowired
+    JacksonTester<Book> jacksonTester;
+    @Test
+    public void jsonTest1() throws IOException {
+        Book book = new Book();
+        book.setId(1);
+        book.setName("三国演义");
+        book.setAuthor("罗贯中");
+        Assertions.assertThat(jacksonTester.write(book)).isEqualToJson("book.json");
+        Assertions.assertThat(jacksonTester.write(book)).hasJsonPathStringValue("@.name");
+        Assertions.assertThat(jacksonTester.write(book)).extractingJsonPathStringValue("@.name")
+                .isEqualTo("三国演义");
+    }
+    @Test
+    public void jsonTest2() throws Exception {
+        String jsonString = "{\"id\":\"1\",\"name\":\"三国演义\",\"author\":\"罗贯中\"}";
+        Assertions.assertThat(jacksonTester.parseObject(jsonString).getName()).isEqualTo("三国演义");
+    }
+}
+```
+
+book.json文件内容如下
+
+```json
+{"id":1,"name":"三国演义","author":"罗贯中"}
+```
+
+代码解释：
+
+* 添加JacksonTester注解，使用JacksonTest进行JSON的序列化和反序列化测试
+* 在序列化完成后判断序列化结果是否是所期待的json，book.json是一个定义在当前包下的JSON文件
+* 判断对象序列化之后生成的JSON中是否有一个名为name的key
+* 判断序列化后的name对应的值是否为"三国演义"
+* 反序列化完成时判断对象的name属性是否为"三国演义"
+
+## 9.0 Spring Boot缓存
+
+Spring 3.1中开始对缓存提供支持，核心思路是对方法的缓存，当看调用一个方法时，将方法的参数和返回值作为key/value缓存起来，当再次调用该方法时，如果缓存中有数据，就直接从缓存中获取，否则再去执行该方法。但是，Spring中并未提供缓存的实现，而是提供了一套缓存API。目前Spring Boot支持的缓存有如下几种：
+
+* JCache(JSR-107)
+* EhCache 2.x
+* Hazelcast
+* Infinispan
+* Couchbase
+* Redis
+* Caffeine
+* Simple
+
+目前常用的缓存实现Ehcache 2.x 和 Redis。由于Spring早已将缓存领域统一，因此无论使用哪种缓存实现，不同的只是缓存配置，开发者使用的缓存注解是一致的（Spring 缓存注解和各种缓存实现的关系就像JDBC和各种数据库驱动的关系一样）
+
+### 9.1 Ehcache 2.x 缓存
+
+Ehcache缓存在Java开发领域已是久负盛名，在Spring Boot中，只需要一个配置文件就可以将Ehcache集成到项目中
+
+1. 创建项目，添加缓存依赖
+
+创建SpringBoot项目，添加spring-boot-starter-cache依赖以及Ehcache依赖
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-cache</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>net.sf.ehcache</groupId>
+        <artifactId>ehcache</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+</dependencies>
+```
+
+2. 添加缓存配置文件
+
+如果Ehcache的依赖存在，并且在classpath下有一个名为ehcache.xml的Ehcache配置文件，那么EhcacheCacheManager将会自动作为缓存的实现。因此，在resources目录下创建ehcache.xml文件作为Ehcache缓存的配置文件
+
+```xml
+<ehcache>
+    <diskStore path="java.io.tmpdir/cache"/>
+<defaultCache maxElementsInMemory="10000"
+              eternal="false"
+              timeToIdleSeconds="120"
+              timeToLiveSeconds="120"
+              overflowToDisk="false"
+              diskPersistent="false"
+              diskExpiryThreadIntervalSeconds="120"/>
+<cache name="book_cache"
+       maxElementsInMemory="10000"
+       eternal="false"
+       timeToIdleSeconds="120"
+       timeToLiveSeconds="120"
+       overflowToDisk="false"
+       diskPersistent="false"
+       diskExpiryThreadIntervalSeconds="600"/>
+</ehcache>
+```
+
+这是一个常规的Ehcache配置文件，提供了两个缓存策略，一个是默认的，另一个名为book_cache。其中，name表示缓存名称；maxElementsInMemory表示缓存的最大格式；eternal表示缓存对象是否永久有效，一旦设置了永久有效，timeout将不起作用；timeToIdleSeconds表示缓存对象在失效前的允许闲置时间（单位：秒），当eternal=false对象不是永久有效时，该属性才生效；timeToLiveSeconds表示缓存对象在失效前允许存活的时间（单位：秒），当eternal=false时该配置才生效；overflowToDisk表示当内存中的对象数量达到maxElementsInMemory时，Ehcache是否将对象写到磁盘中，diskPersistent表示写入到磁盘中的对象是否时持久的；diskExpiryThreadIntervalSeconds表示磁盘失效线程运行时间间隔。如果想要自定义Ehcache配置文件的名称和位置，可以在application.properties中添加如下配置：
+
+```properties
+spring.cache.ehcache.config=classpath:config/another-config.xml
+```
+
+3. 开启缓存
+
+```java
+@SpringBootApplication
+@EnableCaching
+public class App {
+    public static void main(String[] args) {
+        SpringApplication.run(App.class, args);
+    }
+}
+```
+
+4. 创建BookDao
+
+```java
+@Repository
+@CacheConfig(cacheNames = "book_cache")
+public class BookDao {
+    @Cacheable
+    public Book getBookById(Integer id) {
+        System.out.println("getBookById");
+        Book book = new Book();
+        book.setId(1);
+        book.setAuthor("罗贯中");
+        book.setName("三国演义");
+        return book;
+    }
+    @CachePut(key = "#book.id")
+    public Book updateBookById(Book book) {
+        System.out.println("updateBookById");
+        book.setName("三国演义2");
+        return book;
+    }
+    @CacheEvict(key = "#id")
+    public void deleteBookById(Integer id) {
+        System.out.println("deleteBookById");
+    }
+}
+```
+
+实体类代码
+
+```java
+@Data
+public class Book implements Serializable {
+    private static final long serialVersionUID = -296852542896847046L;
+    private Integer id;
+    private String name;
+    private String author;
+}
+```
+
+代码解释：
+
+* 在BookDao上添加@CacheConfig注解指明使用的缓存的名字，这个配置可选，若不使用@CacheConfig注解，则直接在@Cacheable注解中指明缓存名字
+* getBookById方法上添加@Cacheable注解表示对该方法进行缓存，默认情况下，缓存的key时方法的参数，缓存的value是方法的返回值，当开发者在其它类中调用该方法时，首先会根据调用参数查看缓存中是否有相关数据，若有，则直接使用缓存数据，该方法不会执行，否则执行该方法，执行成功后将返回值缓存起来，但若是在当前类中调用该方法，则缓存不会生效
+* @Cacheable注解中还有一个属性condition用来描述缓存的执行时机，例如@Cacheable（condition = "#id%2==0"）表示当id对2取模为0时才进行缓存，否则不缓存
+* 如果开发者不想使用默认的key，也可以自定义key，除了使用参数定义key的方式之外，Spring还提供了一个root对象用来生成key;
+
+| 属性名称    | 属性描述              | 用法示例             |
+| ----------- | --------------------- | -------------------- |
+| methodName  | 当前方法名            | #root.methodName     |
+| method      | 当前方法对象          | #root.method.name    |
+| caches      | 当前方法使用的缓存    | #root.caches[0].name |
+| target      | 当前被调用的对象      | #root.target         |
+| targetClass | 当前被调用对象的class | #root.targetClass    |
+| args        | 当前方法参数数组      | #root.args[0]        |
+
+* 如果这些key不能满足开发需求，也可以自定义缓存key的生成器KeyGenerator
+
+```java
+@Component
+public class MyKeyGenerator implements KeyGenerator {
+    @Override
+    public Object generate(Object o, Method method, Object... objects) {
+        return Arrays.toString(objects);
+    }
+}
+```
+
+则BookDao代码修改如下
+
+```java
+@Repository
+@CacheConfig(cacheNames = "book_cache")
+public class BookDao {
+    @Autowired
+    MyKeyGenerator myKeyGenerator;
+	// ...
+	// ...
+    @Cacheable(keyGenerator = "myKeyGenerator")
+    public Book getBookByIdWithMyKeyGenerator(Integer id, String name) {
+        System.out.println("getBookByIdWithMyKeyGenerator");
+        Book book = new Book();
+        book.setId(1);
+        book.setAuthor("Test");
+        book.setName("MyKey");
+        return book;
+    }
+}
+```
+
+代码解释：
+
+* 
+* 
+
+5. 创建测试类
+
+```java
+@RunWith(SpringRunner.class)
+@SpringBootTest
+public class EhcacheTest {
+    @Autowired
+    BookDao bookDao;
+    @Test
+    public void test() {
+        bookDao.getBookById(1);
+        bookDao.getBookById(1);
+        bookDao.deleteBookById(1);
+        Book book = bookDao.getBookById(1);
+        System.out.println("test:getBookById.book = " + book);
+        book.setId(1);
+        bookDao.updateBookById(book);
+        book = bookDao.getBookById(1);
+        System.out.println("test:after updateBookById getBookById.book = " + book);
+        bookDao.getBookByIdWithMyKeyGenerator(1, "Test");
+        bookDao.getBookByIdWithMyKeyGenerator(1, "Test");
+    }
+}
+```
+
+执行该方法，控制台打印日志如下
+
+```
+getBookById
+deleteBookById
+getBookById
+test:getBookById.book = Book(id=1, name=三国演义, author=罗贯中)
+updateBookById
+test:after updateBookById getBookById.book = Book(id=1, name=三国演义change, author=罗贯中change)
+getBookByIdWithMyKeyGenerator
+```
+
