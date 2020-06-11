@@ -5358,7 +5358,79 @@ getBookByIdWithMyKeyGenerator
 
 1. 创建项目，添加spring-boot-starter-cache依赖和redis依赖
 
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-cache</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-redis</artifactId>
+        <exclusions>
+            <exclusion>
+                <groupId>io.lettuce</groupId>
+                <artifactId>lettuce-core</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+    <dependency>
+        <groupId>redis.clients</groupId>
+        <artifactId>jedis</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+</dependencies>
+```
 
+2. 缓存配置
 
+Redis单机缓存只需要开发者配置application.properties中的redis配置及缓存配置即可
 
+```properties
+# 缓存配置
+spring.cache.cache-names=c1,c2
+spring.cache.redis.time-to-live=1800s
+# redis配置
+spring.redis.database=0
+spring.redis.host=127.0.0.1
+spring.redis.password=123456
+spring.redis.port=11080
+spring.redis.jedis.pool.max-active=8
+spring.redis.jedis.pool.max-idle=8
+spring.redis.jedis.pool.max-wait=-1ms
+spring.redis.jedis.pool.min-idle=0
+```
+
+配置解释：
+
+* 配置缓存名称，Redis中的key都有一个前缀，默认前缀就是`缓存名::`
+* 配置缓存有效期，Redis中key的有效时间
+* Redis基本连接配置
+
+3. 开启缓存
+
+```Java
+@SpringBootApplication
+@EnableCaching
+public class App {
+    public static void main(String[] args) {
+        SpringApplication.run(App.class, args);
+    }
+}
+```
+
+### 9.3 Redis集群缓存
+
+不同于Redis单机缓存，Redis集群缓存的配置要复杂一些，主要体现在配置上，缓存的使用还是和9.1节中介绍的一样。搭建Redis集群缓存主要分为三个步骤：1.搭建Redis集群；2.配置缓存；3.使用缓存。
+
+#### 9.3.1 搭建Redis集群
+
+Redis集群的搭建过程在6.1.4小节；
 
