@@ -5434,3 +5434,180 @@ public class App {
 
 Redis集群的搭建过程在6.1.4小节；
 
+#### 9.3.2 配置缓存
+
+集群redis的连接配置
+
+```yaml
+spring:
+  redis:
+    cluster:
+      ports:
+        - 8001
+        - 8002
+        - 8003
+        - 9001
+        - 9002
+        - 9003
+      host: 127.0.0.1
+      password: 123456
+      poolConfig:
+        max-total: 8
+        max-idle: 8
+        max-wait-millis: -1
+        min-idle: 0
+```
+
+配置集群的JedisConnectionFactory
+
+```java
+@Data
+@Configuration
+@ConfigurationProperties("spring.redis.cluster")
+public class RedisClusterConfig {
+    List<Integer> ports;
+    String host;
+    JedisPoolConfig poolConfig;
+    String password;
+    @Bean
+    RedisClusterConfiguration redisClusterConfiguration() {
+        RedisClusterConfiguration configuration = new RedisClusterConfiguration();
+        List<RedisNode> nodes = new ArrayList<>();
+        for (Integer port : ports) {
+            RedisNode node = new RedisNode(host, port);
+            nodes.add(node);
+        }
+        configuration.setClusterNodes(nodes);
+        configuration.setPassword(RedisPassword.of(password));
+        return configuration;
+    }
+    @Bean
+    JedisConnectionFactory jedisConnectionFactory() {
+        return new JedisConnectionFactory(redisClusterConfiguration(), poolConfig);
+    }
+}
+```
+
+配置集群RedisCache配置
+
+```java
+@Configuration
+public class RedisCacheConfig {
+    @Autowired
+    JedisConnectionFactory jedisConnectionFactory;
+    @Bean
+    RedisCacheManager redisCacheManager() {
+        Map<String, RedisCacheConfiguration> configMap = new HashMap<>();
+        RedisCacheConfiguration redisCacheConfiguration = RedisCacheConfiguration
+                .defaultCacheConfig()
+                .prefixKeysWith("Ding")
+                .disableCachingNullValues()
+                .entryTtl(Duration.ofMinutes(30));
+        configMap.put("c1", redisCacheConfiguration);
+        RedisCacheWriter cacheWriter = RedisCacheWriter.nonLockingRedisCacheWriter(jedisConnectionFactory);
+        return new RedisCacheManager(cacheWriter,
+                RedisCacheConfiguration.defaultCacheConfig(), configMap);
+    }
+}
+```
+
+代码解释：
+
+* 在配置Redis集群时，Spring容器中注入了JedisConnectionFactory的实例，这里注入到RedisCacheConfig中（RedisConnectionFactory是JedisConnectionFactory的父类）
+* 在RedisCacheConfig中提供RedisCacheManager的实例，该实例的构建需要三个参数，第一个参数是一个cacheWriter，直接通过nonLockIngRedisCacheWriter的方法构造出来即可；第二个参数是默认的缓存配置；第三个参数是提前定义好的缓存配置。
+* RedisCacheManager构造方法中第三个参数是一个提前定义好的缓存参数，它是一个Map类型的参数，该Map中的key就是指缓存名字，value就是该名称的缓存所对应的缓存配置，例如key的前缀、缓存过期时间等，若缓存注解中使用的缓存名称不存在于Map中，则使用RedisCacheManager构造方法中第二个参数所定义的默认缓存策略进行数据缓存；例如如下两个缓存配置：
+
+```java
+@Cacheable(value = "c1")
+@Cacheable(value = "c2")
+```
+
+第一行注解中，c1存在于configMap集合中，因此使用的缓存策略是configMap集合中c1所对应的缓存策略；c2不存在于configMap集合中，因此使用的缓存策略是默认的缓存策略。
+
+* 默认的缓存策略通过调用RedisCacheConfiguration中的defaultCacheConfig方法获取
+
+```java
+public static RedisCacheConfiguration defaultCacheConfig() {
+    DefaultFormattingConversionService conversionService = new DefaultFormattingConversionService();
+    registerDefaultConverters(conversionService);
+    return new RedisCacheConfiguration(Duration.ZERO, true, true, CacheKeyPrefix.simple(), SerializationPair.fromSerializer(new StringRedisSerializer()), SerializationPair.fromSerializer(new JdkSerializationRedisSerializer()), conversionService);
+}
+```
+
+由这一段代码可以看到，默认的缓存过期时间为0，即永不过期；第二个参数true表示允许存储null值；第三个参数true表示开启key的前缀；第四个参数表示key的默认前缀是`缓存名::`；接下来两个参数表示key和value的序列化方式；最后一个参数则是一个类型转换器
+
+#### 9.3.3 使用缓存
+
+通过@EnableCache注解开启缓存，创建一个BookDao
+
+```java
+@Repository
+public class BookDao {
+    @Cacheable(cacheNames = "c1")
+    public String findBookById(Integer id) {
+        System.out.println("BookDao.findBookById");
+        Book book = new Book();
+        book.setId(id);
+        book.setName("Book");
+        book.setAuthor("Kay");
+        return book.toString();
+    }
+    @CachePut(value = "c2")
+    public String updateBookById(Integer id) {
+        System.out.println("BookDao.updateBookById");
+        Book book = new Book();
+        book.setName("UpdateBook");
+        book.setId(id);
+        book.setAuthor("newBook");
+        return book.toString();
+    }
+    @Cacheable(value = "c2")
+    public String getBookById(Integer id) {
+        System.out.println("BookDao.getBookById");
+        Book book = new Book();
+        book.setName("UpdateBook");
+        book.setId(id);
+        book.setAuthor("newBook");
+        return book.toString();
+    }
+}
+```
+
+然后创建单元测试
+
+```java
+@RunWith(SpringRunner.class)
+@SpringBootTest
+public class BookCacheTest {
+    @Autowired
+    BookDao bookDao;
+    @Test
+    public void test() {
+        System.out.println(bookDao.findBookById(5));
+        System.out.println(bookDao.updateBookById(10));
+        System.out.println(bookDao.getBookById(10));
+    }
+}
+
+```
+
+访问redis集群查看缓存数据；
+
+![](../images/spring boot + vue/redis集群缓存.png)
+
+## 10.0 Spring Boot安全管理
+
+安全可以说是公司的红线了，一般项目都会有严格的认证和授权操作，在Java开发领域常见的安全框架有Shiro和Spring Security。Shiro是一个轻量级的安全管理框架，提供了认证、授权、会话管理、密码管理、缓存管理等功能，Spring Security是一个相对复杂的安全管理框架，功能比Shiro更加强大，权限控制细粒度更高，对OAuth 2的支持也更友好，又因为Spring Security源自Spring家族，因此可以和Spring框架无缝整合，特别是Spring Boot中提供的自动化配置方案，可以让Spring Security的使用更加便捷
+
+### 10.1 Spring Security的基本配置
+
+Spring Boot针对Spring Security提供了自动化配置方案，因此可以使Spring Security非常容易的整合进Spring Boot项目中，这也是Spring Boot项目中使用Spring Security的优势。
+
+#### 10.1.1 基本用法
+
+基本整合步骤如下
+
+1. 创建项目，添加依赖
+
+创建一个Spring Boot Web项目，然后添加spring-boot-starter-security依赖即可
+
