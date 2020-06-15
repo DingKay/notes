@@ -5611,3 +5611,184 @@ Spring Boot针对Spring Security提供了自动化配置方案，因此可以使
 
 创建一个Spring Boot Web项目，然后添加spring-boot-starter-security依赖即可
 
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+</dependencies>
+```
+
+只要添加了spring-boot-starter-security依赖，项目中的所有资源都会被保护起来。
+
+2. 添加接口
+
+```java
+@RestController
+public class HelloController {
+    @GetMapping("/hello")
+    public String hello() {
+        return "Hello!";
+    }
+}
+```
+
+3. 添加静态文件
+
+在resources/路径下创建static路径，新增一张Laugh.jpg文件
+
+4. 启动项目
+
+启动项目，访问/hello或者/Laugh.jpg会跳转到登陆页面，这个登陆页面是由Spring Security提供的
+
+![](../images/spring boot + vue/SpringSecurity登陆页面.png)
+
+默认的用户名是`user`；默认的登陆密码则是每次启动项目时，随机生成的
+
+```java
+Using generated security password: e6b58e10-5322-4d1a-b6c0-c532ea85e060
+```
+
+登陆成功后就可以访问Laugh.jpg以及/hello
+
+#### 10.1.2 配置用户名和密码
+
+如果对默认的用户名和密码不满意，可以在application.properties中配置默认的用户名、密码以及用户角色
+
+```yaml
+spring:
+  security:
+    user:
+      name: Ding
+      password: 123456
+      roles: admin
+```
+
+配置了默认的用户名和密码后，再次启动项目，启动日志中就不会打印出随机生成的密码了，用户可以直接使用配置好的用户名和密码登陆，登陆成功后，用户还具有一个角色——`admin`
+
+#### 10.1.3 基于内存的认证
+
+当然，也可以自定义类继承自WebSecurityConfigurerAdapter，进行实现对Spring Security更多的自定义配置，例如基于内存的认证；
+
+```java
+@Configuration
+public class MyAccountConfig extends WebSecurityConfigurerAdapter {
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return NoOpPasswordEncoder.getInstance();
+    }
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.inMemoryAuthentication()
+                .withUser("Kay")
+                .password("123456")
+                .roles("ADMIN", "USER")
+                .and()
+                .withUser("Xiu")
+                .password("123")
+                .roles("USER");
+    }
+}
+```
+
+代码解释：
+
+* 自定义MyAccountConfig继承自WebSecurityConfigurerAdapter，并重写configure（AuthernticationManagerBuilder auth）方法，在该方法中配置两个用户，一个用户名是`Kay`密码`123456`，具备两个角色`ADMIN`和`USER`；另一个用户名是`Xiu`，密码`123`具备一个角色`USER`
+* NoOpPasswordEncoder即不对密码进行加密
+
+> 基于内存的用户配置在配置角色时不需要添加`ROLE_`前缀，这点和基于数据库的认证有差别
+
+配置完成后，重启Spring Boot项目，就可以使用这里配置的两个用户进行登陆了
+
+#### 10.1.4 HttpSecurity
+
+受保护的资源都是默认的，而且不能根据实际情况进行角色管理，如果要实现这些功能，就需要重写WebSecurityConfigurerAdapter中的另一个方法
+
+```java
+@Configuration
+public class MyAccountConfig extends WebSecurityConfigurerAdapter {
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return NoOpPasswordEncoder.getInstance();
+    }
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.inMemoryAuthentication()
+                .withUser("root")
+                .password("123456")
+                .roles("ADMIN", "DBA")
+                .and()
+                .withUser("Kay")
+                .password("123456")
+                .roles("ADMIN", "USER")
+                .and()
+                .withUser("Xiu")
+                .password("123")
+                .roles("USER");
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.authorizeRequests()
+                .antMatchers("/db/**")
+                .access("hasRole('ADMIN') and hasRole('DBA')")
+                .antMatchers("/admin/**")
+                .hasRole("ADMIN")
+                .antMatchers("/user/**")
+                .access("hasAnyRole('ADMIN', 'USER')")
+                .anyRequest()
+                .authenticated()
+                .and()
+                .formLogin()
+                .loginProcessingUrl("/login")
+                .permitAll()
+                .and()
+                .csrf()
+                .disable();
+    }
+}
+```
+
+代码解释：
+
+* 配置了三个用户，分别具备不用的角色
+* authorizeRequests()方法开启HttpSecurity的配置，分别配置用户访问`/admin/**`模式的URL必须具备`ADMIN`角色；用户访问`/user/**`模式的URL必须具备`ADMIN`或者`USER`的角色；用户访问`/db/**`模式的URL必须具备`ADMIN`和`DBA`的角色
+* 用户访问其他的URL都必须认证后访问
+* 开启表单登陆，同时配置了登陆接口为`/login`，即可以直接调用`/login`接口，发起一个POST请求进行登陆，登陆参数中用户名必须命名为username，密码必须命名为password，配置loginProcessingUrl接口主要时方便Ajax或者移动端调用登陆接口，最后还配置了permitAll，表示和登陆相关的接口都不需要认证即可访问
+* 关闭csrf
+
+配置完成后，新增Controller进行测试
+
+```java
+@RestController
+public class HelloController {
+    @GetMapping("/hello")
+    public String hello() {
+        return "Hello!";
+    }
+    @GetMapping("/db/hello")
+    public String getDBA() {
+        return "hello DBA!";
+    }
+    @GetMapping("/admin/hello")
+    public String getAdmin() {
+        return "hello Admin!";
+    }
+    @GetMapping("/user/hello")
+    public String getUser() {
+        return "hello User!";
+    }
+}
+```
+
+#### 10.1.5 登陆表单详细配置
+
