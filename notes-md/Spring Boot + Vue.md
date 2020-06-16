@@ -5792,3 +5792,314 @@ public class HelloController {
 
 #### 10.1.5 登陆表单详细配置
 
+表单登陆一直使用Spring Security提供的页面，登陆成功后也是默认的页面跳转，但是，前后端分离正在成为企业级应用开发的主流，在前后端分离的开发方式中，前后端的数据交互通过JSON进行，这是，登陆成功后就不是页面跳转了，而是JSON提示，要实现这些功能，只需要完善上文的配置
+
+```java
+@Configuration
+public class MySecurityConfig extends WebSecurityConfigurerAdapter {
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return NoOpPasswordEncoder.getInstance();
+    }
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.inMemoryAuthentication()
+                .withUser("ding")
+                .password("123")
+                .roles("ADMIN")
+                .and()
+                .withUser("xiu")
+                .password("123")
+                .roles("USER")
+                .accountExpired(true)
+                .and()
+                .withUser("test")
+                .password("123")
+                .roles("GUEST")
+                .accountLocked(true);
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.authorizeRequests()
+                .antMatchers("/admin/**")
+                .access("hasRole('ADMIN')")
+                .anyRequest()
+                .authenticated()
+                .and()
+                .formLogin()
+                .loginPage("/login_page")
+                .loginProcessingUrl("/login")
+                .usernameParameter("username")
+                .passwordParameter("password")
+                .successHandler((HttpServletRequest httpServletRequest,
+                                 HttpServletResponse httpServletResponse,
+                                 Authentication authentication) -> {
+                    Object principal = authentication.getPrincipal();
+                    httpServletResponse.setStatus(200);
+                    httpServletResponse.setContentType("application/json;charset=utf-8");
+                    PrintWriter writer = httpServletResponse.getWriter();
+                    Map<String, Object> map = new HashMap<>(2);
+                    map.put("status", 200);
+                    map.put("msg", principal);
+                    ObjectMapper om = new ObjectMapper();
+                    writer.write(om.writeValueAsString(map));
+                    writer.flush();
+                    writer.close();
+                })
+                .failureHandler((HttpServletRequest httpServletRequest,
+                                 HttpServletResponse httpServletResponse,
+                                 AuthenticationException e) -> {
+                    httpServletResponse.setStatus(200);
+                    httpServletResponse.setContentType("application/json; charset=UTF-8");
+                    PrintWriter writer = httpServletResponse.getWriter();
+                    Map<String, Object> map = new HashMap<>(2);
+                    map.put("status", 401);
+                    String message = "";
+                    if (e instanceof LockedException) {
+                        message = "账号被锁定，登陆失败！";
+                    } else if (e instanceof BadCredentialsException) {
+                        message = "账号名或密码输入错误，登陆失败！";
+                    } else if (e instanceof DisabledException) {
+                        message = "账户被禁用，登陆失败";
+                    } else if (e instanceof AccountExpiredException) {
+                        message = "账户已过期，登陆失败！";
+                    } else if (e instanceof CredentialsExpiredException) {
+                        message = "密码已过期，登陆失败！";
+                    } else {
+                        message = "登陆失败！";
+                    }
+                    map.put("msg", message);
+                    ObjectMapper om = new ObjectMapper();
+                    writer.write(om.writeValueAsString(map));
+                    writer.flush();
+                    writer.close();
+                })
+                .permitAll()
+                .and()
+                .csrf()
+                .disable();
+    }
+}
+```
+
+代码解释：
+
+* 配置loginPage，即登陆页面，配置了loginPage后，如果用户未登录授权就访问一个需要授权才能访问的接口，就会自动跳转到`/login_page`页面让用户登陆，这个login_page时自定义的登陆页面，而不是spring security提供的默认登陆页。
+* 配置了loginProcessUrl，表示登陆请求处理接口，无论是自定义登陆页面还是移动端登陆，都需要使用该接口。
+* 定义了认证所需的用户名和密码的参数，默认用户名参数是`username`密码参数是`password`
+* 定义了登陆成功的处理逻辑，用户登陆成功后可以跳转一个页面，也可以返回登陆成功的JSON。这个要看具体业务逻辑，这里使用的是第二种，返回一个登陆成功的JSON；onAuthenticationSuccess方法的第三个参数一般用来获取当前登陆用户的信息，在登陆成功后，可以获取当前登陆用户的信息一起返回给客户端
+* 定义了登陆失败的处理逻辑，和登陆成功类似，不同的是，登陆失败的回调方法里有一个AuthenticationException参数，通过这个异常参数可以获取失败的原因，进而给用户一个明确的提示
+
+配置完以后，增加thymeleaf模板依赖
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-thymeleaf</artifactId>
+</dependency>
+```
+
+创建一个简单的登陆模板以及controller
+
+```java
+@RestController
+public class HelloController {
+    @GetMapping("/admin/hello")
+    public String hello() {
+        return "Hello ADMIN!";
+    }
+    @GetMapping("/login_page")
+    public ModelAndView login() {
+        ModelAndView modelAndView = new ModelAndView();
+        modelAndView.setViewName("login");
+        return modelAndView;
+    }
+}
+```
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+</head>
+<body>
+    <form action="/login" method="post" content="application/json;charset=utf-8">
+        <input name="username" placeholder="请输入账号">
+        <input name="password" placeholder="请输入密码">
+        <button type="submit">登陆</button>
+    </form>
+</body>
+</html>
+```
+
+测试登陆，登陆成功返回账号信息；
+
+![](../images/spring boot + vue/SpringSecurity登陆成功.png)
+
+使用过期的账号登陆
+
+![](../images/spring boot + vue/SpringSecurity账号过期.png)
+
+#### 10.1.6 注销登陆配置
+
+配置注销登陆接口
+
+```java
+@Configuration
+public class MySecurityConfig extends WebSecurityConfigurerAdapter {
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return NoOpPasswordEncoder.getInstance();
+    }
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.inMemoryAuthentication()
+                .withUser("ding")
+                .password("123")
+                .roles("ADMIN")
+                .and()
+                .withUser("xiu")
+                .password("123")
+                .roles("USER")
+                .accountExpired(true)
+                .and()
+                .withUser("test")
+                .password("123")
+                .roles("GUEST")
+                .accountLocked(true);
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.authorizeRequests()
+                .antMatchers("/admin/**")
+                .access("hasRole('ADMIN')")
+                .antMatchers("/out", "/favicon.ico")
+                .permitAll()
+                .anyRequest()
+                .authenticated()
+                .and()
+                .formLogin()
+                .loginPage("/login_page")
+                .loginProcessingUrl("/login")
+                .usernameParameter("username")
+                .passwordParameter("password")
+                .successHandler((HttpServletRequest httpServletRequest,
+                                 HttpServletResponse httpServletResponse,
+                                 Authentication authentication) -> {
+                    Object principal = authentication.getPrincipal();
+                    httpServletResponse.setStatus(200);
+                    httpServletResponse.setContentType("application/json;charset=utf-8");
+                    PrintWriter writer = httpServletResponse.getWriter();
+                    Map<String, Object> map = new HashMap<>(2);
+                    map.put("status", 200);
+                    map.put("msg", principal);
+                    ObjectMapper om = new ObjectMapper();
+                    writer.write(om.writeValueAsString(map));
+                    writer.flush();
+                    writer.close();
+                })
+                .failureHandler((HttpServletRequest httpServletRequest,
+                                 HttpServletResponse httpServletResponse,
+                                 AuthenticationException e) -> {
+                    httpServletResponse.setStatus(200);
+                    httpServletResponse.setContentType("application/json; charset=UTF-8");
+                    PrintWriter writer = httpServletResponse.getWriter();
+                    Map<String, Object> map = new HashMap<>(2);
+                    map.put("status", 401);
+                    String message = "";
+                    if (e instanceof LockedException) {
+                        message = "账号被锁定，登陆失败！";
+                    } else if (e instanceof BadCredentialsException) {
+                        message = "账号名或密码输入错误，登陆失败！";
+                    } else if (e instanceof DisabledException) {
+                        message = "账户被禁用，登陆失败";
+                    } else if (e instanceof AccountExpiredException) {
+                        message = "账户已过期，登陆失败！";
+                    } else if (e instanceof CredentialsExpiredException) {
+                        message = "密码已过期，登陆失败！";
+                    } else {
+                        message = "登陆失败！";
+                    }
+                    map.put("msg", message);
+                    ObjectMapper om = new ObjectMapper();
+                    writer.write(om.writeValueAsString(map));
+                    writer.flush();
+                    writer.close();
+                })
+                .permitAll()
+                .and()
+                .logout()
+                .logoutUrl("/logout")
+                .clearAuthentication(true)
+                .invalidateHttpSession(true)
+                .addLogoutHandler((HttpServletRequest httpServletRequest,
+                                   HttpServletResponse httpServletResponse,
+                                   Authentication authentication) -> {})
+                .logoutSuccessHandler((HttpServletRequest httpServletRequest,
+                                       HttpServletResponse httpServletResponse,
+                                       Authentication authentication) ->
+                    httpServletResponse.sendRedirect("/login_page"))
+                .permitAll()
+                .and()
+                .csrf()
+                .disable();
+    }
+}
+```
+
+新建一个简单的登出页面；controller代码如下
+
+```java
+@RestController
+public class HelloController {
+    @GetMapping("/admin/hello")
+    public String hello() {
+        return "Hello ADMIN!";
+    }
+    @GetMapping("/login_page")
+    public ModelAndView login() {
+        ModelAndView modelAndView = new ModelAndView();
+        modelAndView.setViewName("login");
+        return modelAndView;
+    }
+    @GetMapping("/out")
+    public ModelAndView out() {
+        ModelAndView modelAndView = new ModelAndView();
+        modelAndView.setViewName("out");
+        return modelAndView;
+    }
+}
+```
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login Out</title>
+</head>
+<body>
+    <form action="/logout" method="post">
+        <button type="submit">登出</button>
+    </form>
+</body>
+</html>
+```
+
+在antMatchers方法中对`/out`以及自定义`favicon.ico`图标的免授权过滤，在不登陆的情况下可以访问；
+
+代码解释：
+
+* 开启一个注销登陆的配置
+* 配置注销登陆请求URL为`/logout`，默认也是`/logout`
+* 配置清楚身份认证信息，默认为true，表示清除
+* 配置使session失效，默认为true
+* 配置一个LogoutHandler，可以在其中完成一些数据清楚工作，例如Cookie的清除，Spring Security提供了一些常见的实现
+* LogoutSuccessHandler可以在这里处理注销成功后的业务逻辑，例如返回一段JSON提示或者跳转到登陆页等
+
