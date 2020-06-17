@@ -6103,3 +6103,91 @@ public class HelloController {
 * 配置一个LogoutHandler，可以在其中完成一些数据清楚工作，例如Cookie的清除，Spring Security提供了一些常见的实现
 * LogoutSuccessHandler可以在这里处理注销成功后的业务逻辑，例如返回一段JSON提示或者跳转到登陆页等
 
+![](../images/spring boot + vue/LogoutHandler实现类.png)
+
+#### 10.1.7 多个HttpSecurity
+
+如果业务复杂，可以配置多个HttpSecurity，实现对WebSecurityConfigurerAdapter的多次扩展
+
+```java
+@Configuration
+public class MySecurityConfig {
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return NoOpPasswordEncoder.getInstance();
+    }
+    @SneakyThrows
+    @Autowired
+    protected void configure(AuthenticationManagerBuilder authenticationManagerBuilder) {
+        authenticationManagerBuilder.inMemoryAuthentication()
+                .withUser("admin")
+                .password("123")
+                .roles("ADMIN")
+                .and()
+                .withUser("guest")
+                .password("123")
+                .roles("GUEST");
+    }
+    @Configuration
+    @Order(1)
+    public static class AdminSecurityConfig extends WebSecurityConfigurerAdapter {
+        @Override
+        protected void configure(HttpSecurity http) throws Exception {
+            http.authorizeRequests()
+                    .antMatchers("/admin/**")
+                    .hasRole("ADMIN")
+                    .and()
+                    .formLogin()
+                    .loginProcessingUrl("/login")
+                    .permitAll();
+        }
+    }
+    @Configuration
+    public static class GuestSecurityConfig extends WebSecurityConfigurerAdapter {
+        @Override
+        protected void configure(HttpSecurity http) throws Exception {
+            http.authorizeRequests()
+                    .antMatchers("/guest/**")
+                    .permitAll();
+        }
+    }
+}
+```
+
+代码解释：
+
+* 配置多个HttpSecurity时，MySecurityConfig不需要继承WebSecurityConfigurerAdapter，在类中创建静态内部类继承WebSecurityConfigurerAdapter即可，静态内部类上添加@Configuration注解和@Order注解，@Order注解表示该配置的优先级，数字越小优先级越大，为加上@Order注解的配置优先级最小；
+* 优先处理`/admin/**`模式的URL，其他的URL在其他的HttpSecurity中进行处理
+* 基本上每个HttpSecurity都需要`antMatcher`去匹配URL模式（最后一个可不设置），若不设置就不会执行到下面的HttpSecurity配置中去
+
+#### 10.1.8 密码加密
+
+1. 加密方案
+
+密码加密一般会用到散列函数，又称散列算法，哈希函数，这是一种从任何数据中创建数字“指纹”的方法。散列函数把消息或者数据压缩成摘要，使得数据量变小，将数据的格式固定下来，然后将数据打乱混合，重新创建一个散列值。散列值通常用一个短的随机字母和数字组成的字符串来代表。好的散列函数在输入域中很少出现散列冲突，在散列表和数据处理中，不抑制冲突来区别数据会使得数据库记录更难找到。我们常用的散列函数有MD5消息摘要算法、安全散列算法（Secure Hash Algorithm）
+
+2. 实践
+
+在Spring Boot中配置密码加密非常容易，只需要修改上文配置的PasswordEncoder这个Bean的实现即可
+
+```java
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+    @SneakyThrows
+    @Autowired
+    protected void configure(AuthenticationManagerBuilder authenticationManagerBuilder) {
+        authenticationManagerBuilder.inMemoryAuthentication()
+                .withUser("admin")
+                .password("$2a$10$RMuFXGQ5AtH4wOvkUqyvuecpqUSeoxZYqilXzbz50dceRsga.WYiq")
+                .roles("ADMIN");
+    }
+```
+
+创建BCryptPasswordEncoder时传入的参数10就是strength，即密钥的迭代次数（也可以不配置，默认10）。同时，配置的内存用户密码也不再是123了；
+
+#### 10.1.9 方法安全
+
+
+
