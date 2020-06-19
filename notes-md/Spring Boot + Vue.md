@@ -6189,5 +6189,340 @@ public class MySecurityConfig {
 
 #### 10.1.9 方法安全
 
+上文介绍的认证与授权都是基于URL的，开发者也可以通过注解来灵活地配置方法安全，要使用相关注解，首先要通过@EnableGlobalMethodSecurity注解开启基于注解的安全配置
 
+```java
+@Configuration
+@EnableGlobalMethodSecurity(prePostEnabled = true, securedEnabled = true)
+public class MultiSecurityConfig {
+//...
+}
+```
+
+代码解释：
+
+* prePostEnable=true会解锁@PreAuthorize 和 @PostAuthorize两个注解，@PreAuthorize注解会在方法执行前进行验证，而@PostAuthorize注解在方法执行后进行验证
+* securedEnable=true会解锁@Secured注解
+
+创建MethodService测试
+
+```java
+@Service
+public class HelloServiceImpl implements HelloService {
+    @PreAuthorize("hasRole('ADMIN')")
+    @Override
+    public String admin() {
+        System.out.println("HelloServiceImpl.admin");
+        return "admin Service!";
+    }
+    @Secured("GUEST")
+    @Override
+    public String guest() {
+        System.out.println("HelloServiceImpl.guest");
+        return "guest Service!";
+    }
+}
+```
+
+代码解释：
+
+* @Secured("ROLE_GUEST")注解表示访问该方法需要`GUEST`角色，角色前缀需要加一个`ROLE_`
+* @PreAuthorize("hasRole('ADMIN')") 注解表示访问该方法需要ADMIN角色
+* @PreAuthorize和@PostAuthorize中都可以使用基于表达式的语法
+
+### 10.2 基于数据库的认证
+
+上文向读者介绍的认证数据都是定义在内存中的，在真实的项目中，用户的基本信息以及角色等都是存储在数据库中，因此需要从数据库中获取数据进行认证
+
+1. 设计数据表
+
+首先需要设计一个基本的用户角色表，一共三张表，分别是用户表、角色表以及用户角色关联表。为了方便测试，预置几条测试数据
+
+![](../images/spring boot + vue/springsecurity数据库设计.png)
+
+```sql
+CREATE TABLE user 
+(
+	id INT(11) PRIMARY KEY,
+	username VARCHAR(32) NOT NULL,
+	password VARCHAR(255) NOT NULL,
+	enabled TINYINT(1) DEFAULT 1,
+	locked TINYINT(1) DEFAULT 0
+);
+
+CREATE TABLE role 
+(
+	id INT(11) PRIMARY KEY,
+	name VARCHAR(32) DEFAULT '',
+	nameZh VARCHAR(32) DEFAULT ''
+);
+
+CREATE TABLE user_role 
+(
+	id INT(11) auto_increment PRIMARY KEY,
+	uid INT(11) NOT NULL,
+	rid INT(11) NOT NULL
+);
+
+INSERT INTO `test`.`user` (id, username, `password`, enabled, locked) VALUES (1, 'root', '$2a$10$Fvy62OC9/9tcNJGYnCpmzOhldIb4Ju2uFUVs410ZM5KUg8xeRn8/u', 1, 0);
+INSERT INTO `test`.`user` (id, username, `password`, enabled, locked) VALUES (2, 'admin', '$2a$10$Fvy62OC9/9tcNJGYnCpmzOhldIb4Ju2uFUVs410ZM5KUg8xeRn8/u', 1, 0);
+INSERT INTO `test`.`user` (id, username, `password`, enabled, locked) VALUES (3, 'user', '$2a$10$Fvy62OC9/9tcNJGYnCpmzOhldIb4Ju2uFUVs410ZM5KUg8xeRn8/u', 1, 0);
+
+INSERT INTO `test`.`role` (id, `name`, nameZh) VALUES (1, 'ROLE_DBA', '系统管理员');
+INSERT INTO `test`.`role` (id, `name`, nameZh) VALUES (2, 'ROLE_ADMIN', '超级管理员');
+INSERT INTO `test`.`role` (id, `name`, nameZh) VALUES (3, 'ROLE_user', '普通用户');
+
+INSERT INTO `test`.`user_role` (uid, rid) VALUES (1, 1);
+INSERT INTO `test`.`user_role` (uid, rid) VALUES (1, 2);
+INSERT INTO `test`.`user_role` (uid, rid) VALUES (2, 2);
+INSERT INTO `test`.`user_role` (uid, rid) VALUES (3, 3);
+```
+
+> 角色名有一个默认的前缀`ROLE_`
+
+2. 创建项目
+
+Mybatis灵活，JPA便捷，创建项目添加依赖；
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.mybatis.spring.boot</groupId>
+        <artifactId>mybatis-spring-boot-starter</artifactId>
+        <version>1.3.2</version>
+    </dependency>
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>druid</artifactId>
+        <version>1.1.10</version>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+</dependencies>
+```
+
+3. 数据库配置
+
+在application.properties中添加数据库连接配置
+
+```properties
+spring.datasource.type=com.alibaba.druid.pool.DruidDataSource
+spring.datasource.url=jdbc:mysql:///test?useUnicode=true&characterEncoding=utf8
+spring.datasource.username=root
+spring.datasource.password=123456
+```
+
+4. 创建实体类
+
+分别创建角色表和用户表对应的实体类，代码如下：
+
+```java
+public class User implements UserDetails {
+    private static final long serialVersionUID = -3647073428504036390L;
+    private Integer id;
+    private String username;
+    private String password;
+    private Boolean enabled;
+    private Boolean locked;
+    private List<Role> roles;
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+        for (Role role : roles) {
+            authorities.add(new SimpleGrantedAuthority(role.getName()));
+        }
+        return authorities;
+    }
+
+    @Override
+    public String getPassword() {
+        return this.password;
+    }
+
+    @Override
+    public String getUsername() {
+        return this.username;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return !this.locked;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return this.enabled;
+    }
+
+    public Integer getId() {
+        return id;
+    }
+
+    public void setId(Integer id) {
+        this.id = id;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public void setEnabled(Boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public Boolean getLocked() {
+        return locked;
+    }
+
+    public void setLocked(Boolean locked) {
+        this.locked = locked;
+    }
+
+    public List<Role> getRoles() {
+        return roles;
+    }
+
+    public void setRoles(List<Role> roles) {
+        this.roles = roles;
+    }
+}
+```
+
+代码解释：
+
+* 用户类实体需要实现UserDetails接口，并实现该接口中的七个方法
+
+| 方法名                    | 解释                             |
+| ------------------------- | -------------------------------- |
+| getAuthorities()          | 获取当前用户对象所具有的角色信息 |
+| getPassword()             | 获取当前用户对象的密码           |
+| getUsername()             | 获取当前用户对象的用户名         |
+| isAccountNonExpired()     | 当前账户是否未过期               |
+| isAccountNonLocked()      | 当前账户是否未锁定               |
+| isCredentialsNonExpired() | 当前账户密码是否未过期           |
+| isEnabled()               | 当前账户是否可用                 |
+
+* 用户根据实际情况设置这七个方法的返回值，因为默认情况下不需要开发者自己进行密码角色等信息的比对，开发者只需要提供相关信息即可，例如getPassword()方法返回的密码和用户输入的登录密码不匹配，会自动抛出BadCredentialsException异常，isAccountNonExpired()方法返回了false，会自动抛出AccountExpiredException异常，因此对开发者而言，只需要按照数据库中的数据在这里返回相应的配置即可。本案例因为数据库中只有enabled和locked字段，故账户未过期和密码未过期两个方法都返回true
+* getAuthorities()方法用来获取当前用户所具有的角色信息，本案例中，用户所具有的角色存储在roles属性中，因此该方法直接遍历roles属性，然后构造SimpleGrantedAuthority集合并返回
+
+> 实现了UserDetails类，故不能使用@Data注解；isxxx 方法等于 getxxx；导致JavaBean里面有两个getxxx方法，违反了JavaBean的规范。
+
+5. 创建UserService
+
+```java
+@Service
+public class UserService implements UserDetailsService {
+    @Autowired
+    UserMapper userMapper;
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        User user = userMapper.loadUserByUsername(username);
+        if (user == null) {
+            throw new UsernameNotFoundException("账号不存在!");
+        }
+        user.setRoles(userMapper.getUserRolesByUid(user.getId()));
+        return user;
+    }
+}
+```
+
+代码解释：
+
+* 定义UserService实现UserDetailsService接口，并实现该接口中的loadUserByUsername方法，该方法的参数就是用户登录时输入的用户名，通过用户名去数据库中查找用户，如果没有查找到用户，就抛出一个账户不存在的异常，如果查找到了用户，就继续查找该用户所具有的角色信息，并将获取到的user对象返回，再由系统提供的DaoAuthenticationProvider类去比对密码是否正确
+* loadUserBydUsername方法将在用户登录时自动调用
+
+当然这里还涉及UserMapper以及UserMapper.xml
+
+```java
+@Mapper
+public interface UserMapper {
+    User loadUserByUsername(String username);
+    List<Role> getUserRolesByUid(Integer id);
+}
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.dk.mapper.UserMapper">
+    <select id="loadUserByUsername" parameterType="string" resultType="com.dk.entity.User">
+        select * from user where username = #{username}
+    </select>
+    <select id="getUserRolesByUid" parameterType="integer" resultType="com.dk.entity.Role">
+        select * from role r, user_role ur where r.id = ur.rid and ur.uid = #{id}
+    </select>
+</mapper>
+```
+
+6. 配置Spring Security
+
+接下来对Spring Security进行配置
+
+```java
+@Configuration
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+    @Autowired
+    UserService userService;
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(10);
+    }
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.userDetailsService(userService);
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.authorizeRequests()
+                .antMatchers("/admin/**")
+                .hasRole("ADMIN")
+                .antMatchers("/dba/**")
+                .hasRole("DBA")
+                .antMatchers("/user/**")
+                .hasRole("user")
+                .anyRequest()
+                .authenticated()
+                .and()
+                .formLogin()
+                .loginProcessingUrl("/login")
+                .permitAll()
+                .and()
+                .csrf()
+                .disable();
+    }
+}
+```
+
+### 10.3 高级配置
 
