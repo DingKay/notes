@@ -6526,3 +6526,31 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
 ### 10.3 高级配置
 
+#### 10.3.1 角色继承
+
+在10.2节中定义了三个角色，但是这三种角色之间不具备任何关系，一般来说角色之间是有关系的，例如ROLE_admin一般具有admin的权限，又具有user的权限，那么如何配置这种继承关系呢？
+
+在Spring Security中只需要提供一个RoleHierarchy即可，假设ROLE_dba具备所有权限，ROLE_admin具有ROLE_user的权限，ROLE_user则是一个公共角色
+
+```java
+@Bean
+RoleHierarchy hierarchy() {
+    RoleHierarchyImpl roleHierarchy = new RoleHierarchyImpl();
+    String hierarchy = "ROLE_DBA > ROLE_ADMIN ROLE_ADMIN > ROLE_USER";
+    roleHierarchy.setHierarchy(hierarchy);
+    return roleHierarchy;
+}
+```
+
+配置完RoleHierarchy之后，具有ROLE_DBA角色的用户就可以访问所有资源了，具有ROLE_ADMIN角色的用户也可以访问具有ROLE_USER才能访问的资源
+
+> `String hierarchy = "ROLE_DBA > ROLE_ADMIN ROLE_ADMIN > ROLE_USER"`中的角色区分大小写，需要与数据库中一致；
+
+#### 10.3.2 动态配置权限
+
+使用HttpSecurity配置的认证授权规则还是不够灵活，无法实现资源和角色之间的动态调整，要实现动态配置URL权限，就需要自定义权限配置
+
+1. 数据库设计
+
+这里的数据库在上一节的基础上再增加一张资源表和资源角色管理表，资源表中定义了用户能够访问的URL模式，资源角色表则定义了访问该模式的URL需要什么样的角色。
+
