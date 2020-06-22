@@ -6554,3 +6554,26 @@ RoleHierarchy hierarchy() {
 
 这里的数据库在上一节的基础上再增加一张资源表和资源角色管理表，资源表中定义了用户能够访问的URL模式，资源角色表则定义了访问该模式的URL需要什么样的角色。
 
+```sql
+CREATE TABLE menu
+(
+	id INT(11) PRIMARY KEY,
+	pattern VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE menu_role
+(
+	id INT(11) AUTO_INCREMENT PRIMARY KEY,
+	mid INT(11) NOT NULL,
+	rid INT(11) NOT NULL
+);
+
+INSERT INTO menu(id, pattern) VALUES(1, "/db/**");
+INSERT INTO menu(id, pattern) VALUES(2, "/admin/**");
+INSERT INTO menu(id, pattern) VALUES(3, "/user/**");
+
+INSERT INTO menu_role(mid, rid) VALUES(1, 1);
+INSERT INTO menu_role(mid, rid) VALUES(2, 2);
+INSERT INTO menu_role(mid, rid) VALUES(3, 3);
+```
+
