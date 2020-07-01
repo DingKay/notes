@@ -6577,3 +6577,94 @@ INSERT INTO menu_role(mid, rid) VALUES(2, 2);
 INSERT INTO menu_role(mid, rid) VALUES(3, 3);
 ```
 
+2. 自定义FilterInvocationSecurityMetadataSource
+
+要实现动态配置权限，首先要自定义FilterInvocationSecurityMetadataSource，Spring Security中通过FilterInvocationSecurityMetadataSource接口中的getAttributes方法来确定一个请求需要哪些角色，FilterInvocationSecurityMetadataSource接口中的默认实现类是DefaultFilterInvocationSecurityMetadataSource，参考其我们可以实现自己的FilterInvocationSecurityMetadataSource
+
+```java
+@Component
+public class CustomFilterInvocationSecurityMetadataSource implements FilterInvocationSecurityMetadataSource {
+    AntPathMatcher antPathMatcher = new AntPathMatcher();
+    @Autowired
+    MenuMapper menuMapper;
+    @Override
+    public Collection<ConfigAttribute> getAttributes(Object o) throws IllegalArgumentException {
+        String request = ((FilterInvocation) o).getRequestUrl();
+        List<Menu> menus = menuMapper.getAllMenus();
+        for (Menu menu : menus) {
+            if (antPathMatcher.match(menu.getPattern(), request)) {
+                List<Role> roles = menu.getRoles();
+                String [] roleArr = new String[roles.size()];
+                for (int i = 0; i < roles.size(); i++) {
+                    roleArr[i] = roles.get(i).getName();
+                }
+                return SecurityConfig.createList(roleArr);
+            }
+        }
+        return SecurityConfig.createList("ROLE_LOGIN");
+    }
+
+    @Override
+    public Collection<ConfigAttribute> getAllConfigAttributes() {
+        return null;
+    }
+
+    @Override
+    public boolean supports(Class<?> aClass) {
+        return FilterInvocation.class.isAssignableFrom(aClass);
+    }
+}
+```
+
+代码解释：
+
+* 开发者自定义FilterInvocationSecurityMetadataSource主要实现该接口中的getAttributes方法，该方法的参数是一个FilterInvocation，开发者可以从FilterInvocation中提取出当前请求的URL，返回值是个Collection<ConfigAttribute>，表示当前请求URL所需的角色
+* 创建一个antPathMatcher，主要用来实现ant风格的URL匹配
+* 从参数中提取出所有资源信息，即本案例中的menu表以及menu所对应的role，在真实项目环境中，开发者可以将该资源信息缓存在Redis或者其它缓存数数据库中
+* 遍历资源信息，遍历过程中，获取当前请求的URL所需要的角色信息并返回，如果当前请求的URL在资源表中不存在相应的模式，说明该请求登录后即可访问，即直接返回`ROLE_LOGIN`
+* getAllConfigAttribute方法用来返回所有定义好的权限资源，Spring Security在启动时会校验相关配置是否正确，如果不需要校验，那么该方法直接返回`null`即可
+* supports方法返回类对象是否支持校验
+
+3. 自定义AccessDecisionManager
+
+当一个请求走完FilterInvocationSecurityMetadataSource中的getAttributes方法后，接下来就会来到AccessDecisionManger类中进行角色信息的比对
+
+```java
+@Component
+public class CustomAccessDecisionManager implements AccessDecisionManager {
+    @Autowired
+    RoleHierarchy roleHierarchy;
+    @Override
+    public void decide(Authentication authentication, Object o, Collection<ConfigAttribute> collection)
+            throws AccessDeniedException, InsufficientAuthenticationException {
+        Collection<? extends GrantedAuthority> grantedAuthorities =
+                roleHierarchy.getReachableGrantedAuthorities(authentication.getAuthorities());
+        for (ConfigAttribute configAttribute : collection) {
+            if ("ROLE_LOGIN".equals(configAttribute.getAttribute())
+            && authentication instanceof UsernamePasswordAuthenticationToken) {
+                return;
+            }
+            for (GrantedAuthority grantedAuthority : grantedAuthorities) {
+                if (configAttribute.getAttribute().equals(grantedAuthority.getAuthority())) {
+                    return;
+                }
+            }
+        }
+        throw new AccessDeniedException("没有访问权限!");
+    }
+
+    @Override
+    public boolean supports(ConfigAttribute configAttribute) {
+        return true;
+    }
+
+    @Override
+    public boolean supports(Class<?> aClass) {
+        return true;
+    }
+}
+```
+
+代码解释：
+
+* 自定义AccessDecisionManager
