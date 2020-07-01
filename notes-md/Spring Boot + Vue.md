@@ -6667,4 +6667,160 @@ public class CustomAccessDecisionManager implements AccessDecisionManager {
 
 代码解释：
 
-* 自定义AccessDecisionManager
+* 自定义AccessDecisionManager并重写decide方法，在该方法中判断当前登陆的用户是否具备当前请求URL所需的角色信息，如果不具备，就抛出AccessDeniedException异常，否则不做任何处理
+* decide方法有三个参数，第一个参数包含当前登陆用户的信息；第二个参数则是一个Filter Invocation对象，可以获取当前请求对象等；第三个参数就是FilterInvocationSecurityMetadataSource中的getAttributes方法的返回值，即当前请求URL所需要的角色
+* 进行角色对比，如果需要的角色是ROLE_LOGIN，说明当前请求的URL用户登陆后即可访问，如果authentication是UsernamePasswordAuthenticationToken的实例，那么说明当前用户已登陆，该方法到此结束，否则进入正常的判断流程，如果当前用户具备当前请求需要的角色，那么方法结束
+
+涉及到的Mapper、Mapper.xml、以及实体类
+
+```java
+@Mapper
+public interface MenuMapper {
+    List<Menu> getAllMenus();
+}
+```
+
+```java
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.dk.mapper.MenuMapper">
+    <resultMap id="BaseResultMap" type="com.dk.entity.Menu">
+        <id property="id" column="id"/>
+        <result property="pattern" column="pattern"/>
+        <collection property="roles" ofType="com.dk.entity.Role">
+            <id property="id" column="rid"/>
+            <result property="name" column="rname"/>
+            <result property="nameZh" column="rnameZh"/>
+        </collection>
+    </resultMap>
+    <select id="getAllMenus" resultMap="BaseResultMap">
+        select m.*, r.id as rid, r.name as rname, r.nameZh as rnameZh from menu m left join
+            menu_role mr on m.`id` = mr.`mid` left join role r on mr.`rid` = r.`id`
+    </select>
+</mapper>
+```
+
+```java
+@Data
+public class Menu {
+    private Integer id;
+    private String pattern;
+    private List<Role> roles;
+}
+```
+
+4. 配置
+
+最后在SecurityConfig中配置如下
+
+```java
+@Configuration
+public class MySecurityConfig extends WebSecurityConfigurerAdapter {
+    @Autowired
+    UserServiceImpl userService;
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(10);
+    }
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.userDetailsService(userService);
+    }
+    @Bean
+    RoleHierarchy roleHierarchy() {
+        RoleHierarchyImpl roleHierarchy = new RoleHierarchyImpl();
+        String hierarchy = "ROLE_DBA > ROLE_ADMIN ROLE_ADMIN > ROLE_USER";
+        roleHierarchy.setHierarchy(hierarchy);
+        return roleHierarchy;
+    }
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.authorizeRequests()
+                .anyRequest()
+                .authenticated()
+                .withObjectPostProcessor(
+                        new ObjectPostProcessor<FilterSecurityInterceptor>() {
+                            @Override
+                            public <O extends FilterSecurityInterceptor> O postProcess(O o) {
+                                o.setSecurityMetadataSource(cfisms());
+                                o.setAccessDecisionManager(cadm());
+                                return o;
+                            }
+                        }
+                )
+                .and()
+                .formLogin()
+                .loginProcessingUrl("/login")
+                .and()
+                .csrf()
+                .disable();
+
+    }
+    @Bean
+    CustomFilterInvocationSecurityMetadataSource cfisms() {
+        return new CustomFilterInvocationSecurityMetadataSource();
+    }
+    @Bean
+    CustomAccessDecisionManager cadm() {
+        return new CustomAccessDecisionManager();
+    }
+}
+```
+
+### 10.4 OAuth 2
+
+#### 10.4.1 OAuth 2 简介
+
+OAuth是一个开放标准，该标准允许用户让第三方应用访问该用户在某一网站上存储的私密资源（如头像、照片、视频等），而在这个过程中无须将用户名和密码提供给第三方应用，实现这个功能是通过一个令牌（token），而不是用户名和密码来访问他们存放在特定服务提供者的数据。每一个令牌授权一个特定的网站在特定的时段访问特定的资源。这样，OAuth让用户可以授权第三方网站灵活的访问存储在另外一些资源服务器的特定信息，而非所有内容。
+
+采用令牌的方式可以让用户灵活地对第三方应用授权或者收回权限。OAuth2是OAuth协议的下一个版本，但不向下兼容OAuth 1.0。OAuth2关注客户端开发者的简易性，同时为Web应用、桌面应用、移动设备等提供专门的认证流程。传统的Web开发登陆认证一般都是基于Session的，但是在前后端分离的架构中继续使用Session会有许多不便，因为移动端（Android、IOS、微信小程序）要么不支持Cookie（微信小程序），要么使用非常不方便，对于这些问题，使用OAuth2认证都能解决
+
+#### 10.4.2 OAuth 2 角色
+
+要了解OAuth 2，需要先了解OAuth 2 中几个基本的角色
+
+* 资源所有者：资源所有者即用户，具有头像、照片、视频等资源。
+* 客户端：客户端即第三方应用
+* 授权服务器：授权服务器用来验证用户提供的信息是否正确，并返回一个令牌给第三方应用。
+* 资源服务器：资源服务器是提供给用户资源的服务器
+
+一般来说，授权服务器和资源服务器可以是同一台服务器
+
+#### 10.4.3 OAuth 2 授权流程
+
+OAuth 2 的授权流程到底是什么样的呢？
+
+具体步骤如下：
+
+> 步骤一：客户端（第三方应用）向用户请求授权
+>
+> 步骤二：用户单击客户端所呈现的服务授权页面上的同意按钮后，服务端返回一个授权许可凭证给客户端
+>
+> 步骤三：客户端拿着授权许可凭证去授权服务器申请令牌
+>
+> 步骤四：授权服务器验证信息无误后，发放令牌给客户端
+>
+> 步骤五：客户端拿着令牌去资源服务器访问资源
+>
+> 步骤六：资源服务器验证令牌无误后开放资源
+
+这是一个大致的流程，因为OAuth 2中有四种不同的授权模式，每种授权模式的授权流程又会有差异，基本流程如下：
+
+![](../images/spring boot + vue/OAuth授权基本流程.png)
+
+#### 10.4.4 授权模式
+
+OAuth协议的授权模式分为四种，分别如下：
+
+* 授权码模式：授权码模式（Authentication code）是功能最完整、流程最严谨的授权模式。它的特点就是通过客户端的服务器与授权服务器进行交互，国内最常见的第三方平台登陆功能基本都是使用这种模式
+* 简化模式：简化模式不需要客户端服务器参与，直接在浏览器中向授权服务器申请令牌，一般若网站是纯静态页面，则可以采用这种方式
+* 密码模式：密码模式是用户把用户名密码直接告诉客户端，客户端使用这些信息向授权服务器申请令牌，这需要用户对客户端高度信任，例如客户端应用和服务提供商是同一家公司
+* 客户端模式：客户端模式是指客户端使用自己的名义而不是用户的名义向服务器提供者申请授权，严格来说，客户端模式并不能算作OAuth协议要解决的问题的一种解决方案，但是，对于开发者而言，在一些前后端分离应用或者为移动端提供的认证授权服务器上使用这种模式还是非常方便的
+
+这四种模式各有千秋，分别适用于不同的开发场景，开发者根据实际情况进行选择。
+
+#### 10.4.5 实践
+
+本案例要介绍的是在前后端分离应用提供的认证服务器中如何快速搭建OAuth服务，因此主要介绍密码模式
+
+1. 创建项目，添加依赖
