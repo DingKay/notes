@@ -6825,3 +6825,264 @@ OAuth协议的授权模式分为四种，分别如下：
 
 1. 创建项目，添加依赖
 
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-redis</artifactId>
+        <exclusions>
+            <exclusion>
+                <groupId>io.lettuce</groupId>
+                <artifactId>lettuce-core</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+    <dependency>
+        <groupId>redis.clients</groupId>
+        <artifactId>jedis</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.security.oauth</groupId>
+        <artifactId>spring-security-oauth2</artifactId>
+        <version>2.3.3.RELEASE</version>
+    </dependency>
+</dependencies>
+```
+
+由于Spring Boot中的OAuth协议是在Spring Security的基础上完成的，因此首先要添加Spring Security的依赖，要用到OAuth 2，因此添加OAuth 2相关依赖，令牌可以存储在Redis缓存服务器上，同时Redis具有过期等功能，很适合令牌的存储，因此也加入Redis依赖。
+
+项目创建后，接下来在Application.properties中配置一下Redis服务器的连接信息，代码如下：
+
+```properties
+spring.redis.jedis.pool.max-active=8
+spring.redis.jedis.pool.max-idle=8
+spring.redis.jedis.pool.max-wait=-1ms
+spring.redis.jedis.pool.min-idle=0
+spring.redis.password=123456
+spring.redis.port=11080
+spring.redis.host=127.0.0.1
+spring.redis.database=0
+```
+
+2. 配置授权服务器
+
+授权服务器和资源服务器可以是同一台服务器，也可以是不同服务器，本案例中假设是同一台服务器，通过不同的配置分开开启授权服务器和资源服务器，首先是授权服务器；
+
+```java
+@Configuration
+@EnableAuthorizationServer
+public class AuthenticationServerManager extends AuthorizationServerConfigurerAdapter {
+    @Autowired
+    AuthenticationManager authenticationManager;
+    @Autowired
+    UserDetailsService userDetailsService;
+    @Autowired
+    RedisConnectionFactory redisConnectionFactory;
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(10);
+    }
+    @Override
+    public void configure(ClientDetailsServiceConfigurer clients) throws Exception {
+        clients.inMemory()
+                .withClient("password")
+                .authorizedGrantTypes("password", "refresh_token")
+                .accessTokenValiditySeconds(1800)
+                .resourceIds("rid")
+                .scopes("all")
+                .secret("$2a$10$Fvy62OC9/9tcNJGYnCpmzOhldIb4Ju2uFUVs410ZM5KUg8xeRn8/u");
+    }
+    @Override
+    public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
+        endpoints.tokenStore(new RedisTokenStore(redisConnectionFactory))
+                .authenticationManager(authenticationManager)
+                .userDetailsService(userDetailsService);
+    }
+    @Override
+    public void configure(AuthorizationServerSecurityConfigurer security) throws Exception {
+        security.allowFormAuthenticationForClients();
+    }
+}
+```
+
+代码解释：
+
+* 自定义类继承自AuthorizationServerConfigurerAdapter，完成对授权服务器的配置，然后通过@EnableAuthorizationServer注解开启授权服务器
+* 注入了AuthenticationManager，该对象将用来支持password模式
+* 注入了RedisConnectionFactory，该对象用来完成Redis缓存，将令牌信息存储到Redis缓存中
+* 注入了UserDetailsService，该对象将为刷新token提供支持
+* 配置了password授权模式，authorizedGrantTypes表示OAuth 2中的授权模式为password和refresh_token两种，在标准的OAuth 2 中，授权模式并不包括refresh_token，但是在Spring Security的实现中将其归为一种，因此如果需要实现access_token的刷新，就需要添加这样一种授权模式，accessTokenValiditySeconds方法配置了access_token的过期时间，resourceIds配置了资源id，secret方法配置了加密后的密码，明文是123456
+* 配置了令牌的存储，AuthenticationManager和UserDetailsService主要用于支持password模式以及令牌的刷新
+* 最后的配置表示支持client_id和client_secret做登陆认证
+
+3. 配置资源服务器
+
+配置资源服务器代码如下
+
+```java
+@Configuration
+@EnableResourceServer
+public class ResourceServerConfig extends ResourceServerConfigurerAdapter {
+    @Override
+    public void configure(ResourceServerSecurityConfigurer resources) throws Exception {
+        resources.resourceId("rid")
+                .stateless(true);
+    }
+    @Override
+    public void configure(HttpSecurity http) throws Exception {
+        http.authorizeRequests()
+                .antMatchers("/admin/**")
+                .hasRole("admin")
+                .antMatchers("/user/**")
+                .hasRole("user")
+                .anyRequest()
+                .authenticated();
+    }
+}
+```
+
+代码解释：
+
+* 自定义类继承自ResourceServerConfigurerAdapter，并添加@EnableResourceServer注解开启资源服务器配置
+* 配置资源id，这里的资源id和授权服务器中的资源id一致，然后设置这些资源仅基于令牌认证
+
+4. 配置Security
+
+```java
+@Configuration
+public class MySecurityConfig extends WebSecurityConfigurerAdapter {
+    @Bean
+    @Override
+    public AuthenticationManager authenticationManagerBean() throws Exception {
+        return super.authenticationManagerBean();
+    }
+    @Bean
+    @Override
+    protected UserDetailsService userDetailsService() {
+        return super.userDetailsService();
+    }
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.inMemoryAuthentication()
+                .withUser("admin")
+                .password("$2a$10$Fvy62OC9/9tcNJGYnCpmzOhldIb4Ju2uFUVs410ZM5KUg8xeRn8/u")
+                .roles("admin");
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.antMatcher("/oauth/**")
+                .authorizeRequests()
+                .antMatchers("/oauth/**")
+                .permitAll()
+                .and()
+                .csrf()
+                .disable();
+    }
+}
+```
+
+这里Spring Security的配置基本与前文一致，唯一不同的是多了两个Bean，这里两个Bean将注入授权服务器配置类中使用。另外，这里的HttpSecurity配置主要是`/oauth/**`模式的URL，这一类的请求直接放行。在Spring Security配置和资源服务器配置中，一共涉及两个HttpSecurity，其中Spring Security中的配置优先级高于资源服务器中的配置，即请求地址先经过Spring Security的HttpSecurity，再经过资源服务器的HttpSecurity
+
+5. 测试验证
+
+首先创建三个简单的请求地址，代码如下：
+
+```java
+@RestController
+public class HelloController {
+    @GetMapping("/admin/hello")
+    public String admin() {
+        return "Hello! admin";
+    }
+    @GetMapping("/user/hello")
+    public String user() {
+        return "Hello! user";
+    }
+    @GetMapping("/hello")
+    public String hello() {
+        return "Hello!";
+    }
+}
+```
+
+根据前文的配置，要请求这三个地址，分别需要admin角色、user角色以及登陆后访问。
+
+所有都配置完成后，启动Redis服务器，再启动Spring Boot项目，首先发送一个POST请求获取token，请求地址如下
+
+```properties
+请求URL：
+http://127.0.0.1:8080/oauth/token
+请求类型：
+POST
+请求参数：
+username:admin
+password:123456
+grant_type:password
+client_id:password
+scope:all
+client_secret:123456
+返回结果值：
+{
+    "access_token": "dbec9a68-19d9-4ecd-a4bf-6bd5341804fa",
+    "token_type": "bearer",
+    "refresh_token": "68f3f9b0-dcca-4c2b-b2d0-90da3052e639",
+    "expires_in": 1799,
+    "scope": "all"
+}
+```
+
+请求地址中包含的参数有用户名、密码、授权模式、客户端id、scope以及客户端密码，基本就是授权服务器中所配置的数据
+
+返回结果有access_token、token_type、refresh_token、expires_in以及scope，其中access_token是获取其他资源时要用的令牌，refresh_token用来刷新令牌，expires_in表示access_token的过期时间，当access_token过期后，使用refresh_token来重新获取新的access_token（前提是refresh_token未过期），请求地址如下
+
+```properties
+请求URL：
+http://127.0.0.1:8080/oauth/token
+请求类型：
+POST
+请求参数：
+grant_type:refresh_token
+refresh_token:09e0f834-847e-4387-af7e-11c61dd03bf4
+client_id:password
+client_secret:123456
+返回结果值：
+{
+    "access_token": "0df6941c-8e66-4f1d-995c-47641d5f9917",
+    "token_type": "bearer",
+    "refresh_token": "09e0f834-847e-4387-af7e-11c61dd03bf4",
+    "expires_in": 1799,
+    "scope": "all"
+}
+```
+
+获取新的access_token时需要携带上refresh_token，同时授权模式设置为refresh_token，在获取的结果中access_token会变化，同时access_token有效期也会变化
+
+接下来访问所有资源，携带上access_token参数即可，例如`/user/hello`接口
+
+![](../images/spring boot + vue/OAuth授权-测试-1.png)
+
+如果访问一个非法资源，例如admin用户访问`/user/hello`接口
+
+![](../images/spring boot + vue/OAuth授权-测试-2.png)
+
+最后，再来看一下Redis中的数据
+
+![](../images/spring boot + vue/OAuth授权-Redis缓存accessToken.png)
+
+到此，一个password模式的OAuth认证体系就搭建成功了。
+
+OAuth中的认证模式有4种，需要结合自己开发的实际情况选择其中一种，本案例介绍的时在前后端分离应用种常用的password模式，其他的授权模式也都有自己的使用场景。
+
