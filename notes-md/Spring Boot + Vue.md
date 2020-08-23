@@ -7086,3 +7086,293 @@ client_secret:123456
 
 OAuth中的认证模式有4种，需要结合自己开发的实际情况选择其中一种，本案例介绍的时在前后端分离应用种常用的password模式，其他的授权模式也都有自己的使用场景。
 
+### 10.5 Spring Boot 整合 Shiro
+
+#### 10.5.1 Shiro简介
+
+Apache Shiro是一个开源的轻量级的Java安全框架，它提供身份认证、授权、密码管理以及会话管理等功能。相对于Spring Security，Shiro框架更加直观、易用，同时页能提供健壮的安全性。
+
+在传统的SSM框架中，手动整合Shiro的步骤还是比较多的，针对Spring Boot，Shiro官方提供了shiro-spring-boot-web-starter用来简化Shiro在Spring Boot中的配置。
+
+#### 10.5.2 整合Shiro
+
+1. 创建项目
+
+首先创建一个普通的Spring Boot项目，添加Shiro依赖以及页面模板依赖
+
+```xml
+<parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>2.0.4.RELEASE</version>
+</parent>
+
+<dependencies>
+    <dependency>
+        <groupId>org.apache.shiro</groupId>
+        <artifactId>shiro-spring-boot-web-starter</artifactId>
+        <version>1.4.0</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-thymeleaf</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>com.github.theborakompanioni</groupId>
+        <artifactId>thymeleaf-extras-shiro</artifactId>
+        <version>2.0.0</version>
+    </dependency>
+</dependencies>
+```
+
+2. Shiro基本配置
+
+首先在application.yml中配置Shiro的基本信息
+
+```yaml
+shiro:
+  enabled: true
+  web:
+    enabled: true
+  loginUrl: /login
+  successUrl: /index
+  unauthorizedUrl: /unauthorized
+  sessionManager:
+    sessionIdUrlRewritingEnabled: true
+    sessionIdCookieEnabled: true
+```
+
+代码解释：
+
+* 配置一表示开启Shiro配置，默认为true
+* 配置二表示开启Shiro Web配置，默认为true
+* 配置三表示登陆地址，默认为"/login.jsp"
+* 配置四表示登陆成功地址，默认为"/"
+* 配置五表示未获授权默认跳转地址
+* 配置六表示是否开启通过url参数实现会话跟踪，如果网站支持Cookie，可以关闭此选项，默认为true
+* 配置七表示是否允许通过Cookie实现会话跟踪，默认为true
+
+基本信息配置完毕后，接下来在Java代码中配置Shiro，提供两个最基本的Bean即可
+
+```java
+@Configuration
+public class ShiroConfig {
+    @Bean
+    public Realm realm() {
+        TextConfigurationRealm realm = new TextConfigurationRealm();
+        realm.setUserDefinitions("ding=123,user\n admin=123,admin");
+        realm.setRoleDefinitions("admin=read,write\n user=read");
+        return  realm;
+    }
+
+    @Bean
+    public ShiroFilterChainDefinition shiroFilterChainDefinition() {
+        DefaultShiroFilterChainDefinition definition = new DefaultShiroFilterChainDefinition();
+        definition.addPathDefinition("/login", "anon");
+        definition.addPathDefinition("/doLogin", "anon");
+        definition.addPathDefinition("/logout", "logout");
+        definition.addPathDefinition("/**", "authc");
+        return definition;
+    }
+
+    @Bean
+    public ShiroDialect shiroDialect() {
+        return new ShiroDialect();
+    }
+}
+```
+
+代码解释：
+
+* 这里提供两个关键Bean，一个是Realm，另一个是ShiroFilterChainDefinition。至于ShiroDialect，则是为了支持在Thymeleaf中使用Shiro标签，如果不在Thymeleaf中使用Shiro标签，那么可以不提供ShiroDialect
+* Realm可以是自定义Realm，也可以是Shiro提供的Realm，这里没有配置数据库连接，直接配置了两个用户；分别对应角色admin以及user，user有read权限，admin则有read和write权限
+* ShiroFilterChainDefinition Bean中配置了基本的过滤规则，"/login"和"/doLogin"可以匿名访问，"logout"是一个注销登陆请求，其余请求则都需要认证后才能访问
+
+接下来配置登陆接口以及页面访问接口
+
+```java
+@Controller
+public class UserController {
+    @PostMapping("/doLogin")
+    public String doLogin(String username, String password, Model model) {
+        UsernamePasswordToken token = new UsernamePasswordToken(username, password);
+        Subject subject = SecurityUtils.getSubject();
+        try {
+            subject.login(token);
+        } catch (AuthenticationException e) {
+            System.out.println("UserController ## login error");
+            model.addAttribute("error", "用户名或密码错误！");
+            return "login";
+        }
+        return "redirect:/index";
+    }
+
+    @RequiresRoles("admin")
+    @GetMapping("/admin")
+    public String admin() {
+        return "admin";
+    }
+
+    @RequiresRoles(value = {"admin", "user"}, logical = Logical.OR)
+    @GetMapping("/user")
+    public String user() {
+        return "user";
+    }
+}
+```
+
+代码解释：
+
+* 在doLogin中，首先构造一个UsernamePasswordToken实例，然后获取一个Subject对象，并调用对象中的login方法执行登陆操作，在登陆操作执行中，当有异常抛出时，说明登陆失败，携带错误信息返回登陆视图；当登陆成功时，则重定向到index页面
+* 接下来暴露两个接口，"/admin"和"/user"，对于"/admin"接口，需要具有admin角色才可以访问；对于"/user"接口，具备admin角色或者user角色其中任意一个即可访问。
+
+对于其他不需要角色就能访问的接口，直接在WebMvc中配置即可
+
+```java
+@Configuration
+public class WebMvcConfig implements WebMvcConfigurer {
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/login").setViewName("login");
+        registry.addViewController("/index").setViewName("index");
+        registry.addViewController("/unauthorized").setViewName("unauthorized");
+    }
+}
+```
+
+接下来创建全局异常处理器进行全局异常处理，本案例中主要是处理授权异常
+
+```java
+@ControllerAdvice
+public class ExceptionController {
+    @ExceptionHandler(AuthorizationException.class)
+    public ModelAndView error(AuthorizationException e) {
+        System.out.println("ExceptionController ## catch AuthenticationException ");
+        ModelAndView modelAndView = new ModelAndView("unauthorized");
+        modelAndView.addObject("error", e.getMessage());
+        return modelAndView;
+    }
+}
+```
+
+当用户访问未授权的资源时，跳转到unauthorized视图中，并携带出错信息
+
+配置完成后，最后在`resource/templates`目录下创建五个HTML页面进行测试
+
+1. index.html
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:shiro="http://www.pollix.at/thymeleaf/shiro">
+<head>
+    <meta charset="UTF-8">
+    <title>Index</title>
+</head>
+<body>
+    <h3>Hello,<shiro:principal/></h3>
+    <h3><a href="/logout">注销登陆</a></h3>
+    <h3><a shiro:hasRole="admin" href="/admin">管理员页面</a></h3>
+    <h3><a shiro:hasAnyRole="admin,user" href="/user">普通用户页面</a></h3>
+</body>
+</html>
+```
+
+index.html是登陆成功后跳转的页面，首先展示当前用户的用户名，然后展示"注销登陆"的🔗链接，若当前用户具备admin角色，则展示一个"管理员页面"的超链接，若用户具备user角色或者admin角色，则展示一个"普通用户页面"的超链接，注意这里导入的名称空间是 `xmlns:shiro="http://www.pollix.at/thymeleaf/shiro"`和以下页面中导入的Shiro名称空间不一致
+
+2. login.html
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+</head>
+<body>
+    <div>
+        <form action="/doLogin" method="post">
+            用户名：<input type="text" name="username"><br/>
+            密  码：<input type="password" name="password"><br/>
+            <div th:text="${error}"/>
+            <input type="submit" value="登陆">
+        </form>
+    </div>
+</body>
+</html>
+```
+
+login页面是一个普通的登陆页面，在登陆失败时，展示登陆失败的错误信息
+
+3. user.html
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User</title>
+</head>
+<body>
+    <h1>普通用户页面</h1>
+</body>
+</html>
+```
+
+4. admin.html
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin</title>
+</head>
+<body>
+    <h1>管理员页面</h1>
+</body>
+</html>
+```
+
+5. unauthorized.html
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>Unauthorized</title>
+</head>
+<body>
+    <div>
+        <h3>未授权，非法访问</h3>
+        <h3 th:text="${error}"></h3>
+    </div>
+</body>
+</html>
+```
+
+配置完成后，启动项目，访问登陆页面，分别使用两个账号登陆；
+
+![](../images/spring boot + vue/Shiro-Ding.png)
+
+![](../images/spring boot + vue/Shiro-Admin.png)
+
+当user用户访问admin的接口时
+
+![](../images/spring boot + vue/Shiro-unauthorized.png)
+
+### 10.6 小结
+
+本章节介绍了Spring Security以及Shiro在Spring Boot中的使用，对于Spring Security，有基于传统方式的Session认证，也有使用OAuth协议的认证，一般来说，在传统的Web框架中，使用Session认证方便快捷，但是，若结合微服务、前后端分离等架构，则使用OAuth认证更加方便，具体使用哪一种，需要根据实际情况进行取舍。对于Shiro，虽然功能不及Spring Security强大，但是简单易用，而且也能胜任大部分中小型项目，当然在Spring Boot项目中，Spring Security的整合显然更加容易，因此可以首选Spring Security。
+
+## 11.0 Spring Boot整合WebStocket
+
+### 11.1 为什么需要WebSocket
+
+在HTTP协议中，所有的请求都是由客户端发起的，由服务端进行响应，服务端无法向客户端推送消息，但是在一些需要即时通讯的应用中，又不可避免地需要服务端向客户端推送消息，传统的解决方案主要有如下几种
+
+1. 轮询
+
+轮询是最简单的一种解决方案，所谓轮询，就说客户端在固定的时间间隔下不停地向服务端发送请求，查看服务端是否有最新数据，若服务端有最新数据，则返回给客户端，若服务端没有，则返回一个空的JSON或者XML文档。轮询对开发人员而言实现方便，但是弊端也很明显：客户端每次都要新建HTTP请求，服务端需要处理大量的无效请求，在高并发的情况下会严重拖慢服务端的运行效率，同时服务端的资源被极大的浪费了，因此这种方式并不可取。
+
+2. 
