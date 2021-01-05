@@ -38,7 +38,7 @@ mvn archetype:generate -DgroupId=com.dk -DartifactId=chapter01 -DarchetypeArtifa
 
 打开指令，输入上述命令
 
-![](../images/Spring Boot + Vue/mvn创建springboot工程.png)
+![](images/Spring Boot + Vue/mvn创建springboot工程.png)
 
 使用Eclipse创建Maven工程
 
@@ -118,7 +118,7 @@ public class App {
 
 此时如果仍然无法访问，则需要检查启动类 *App* 与 *HelloController* 的包层级是否错误
 
-![](../images/Spring Boot + Vue/启动类与HelloController层级错误.png)
+![](images/Spring Boot + Vue/启动类与HelloController层级错误.png)
 
 此时需要手动修改扫包注解中的 *value* 值
 
@@ -151,7 +151,7 @@ public class App {
 mvn spring-boot:run
 ```
 
-![](../images/Spring Boot + Vue/mvn启动springboot.png)
+![](images/Spring Boot + Vue/mvn启动springboot.png)
 
 #### 1.3.2 直接运行main方法
 
@@ -340,7 +340,7 @@ server.ssl.key-store-password=980217
 
 此时如果以*HTTP*请求访问就会访问失败，是因为*Spring Boot*不支持同时在配置中启动*HTTP*和*HTTPS*
 
-![](../images/spring boot + vue/开启ssl后使用http访问.png)
+![](images/spring boot + vue/开启ssl后使用http访问.png)
 
 配置请求重定向
 
@@ -465,9 +465,9 @@ public class Book {
 
 `使用@ConfigurationProperties注解时，IDEA提示：Spring Boot Configuration Annotation Processor not configured`
 
-![](../images/spring boot + vue/IDEA提示错误1.png)
+![](images/spring boot + vue/IDEA提示错误1.png)
 
-解决：![](../images/spring boot + vue/IDEA提示错误1-解决.png)
+解决：![](images/spring boot + vue/IDEA提示错误1-解决.png)
 
 添加依赖
 
@@ -534,7 +534,7 @@ public class Person {
 
 注入的结果
 
-![](../images/spring boot + vue/person-my.png)
+![](images/spring boot + vue/person-my.png)
 
 还支持更复杂的配置，即集合中也可以是一个对象
 
@@ -565,7 +565,7 @@ public class School {
 
 注入的结果
 
-![](../images/spring boot + vue/yaml-school.png)
+![](images/spring boot + vue/yaml-school.png)
 
 在*Spring Boot*中使用*YAML*虽然方便，但是*YAML*也有一些缺陷，例如无法使用*@PropertySource*注解加载*YAML*文件，如果项目中有这种需求，还是需要使用*Properties*格式的配置文件。
 
@@ -743,7 +743,7 @@ public class BookController {
 
 5. **运行**
 
-![](../images/spring boot + vue/thymeleaf-book.png)
+![](images/spring boot + vue/thymeleaf-book.png)
 
 ### 3.2 整合FreeMarker
 
@@ -892,7 +892,7 @@ public class BookController {
 
 此时访问*https://localhost/book*
 
-![](../images/spring boot + vue/book的json返回.png)
+![](images/spring boot + vue/book的json返回.png)
 
 这是Spring Boot自带的处理方式，如果采用这种方式，那么对于字段忽略、日期格式化等常见需求都可以用注解来解决
 
@@ -1029,7 +1029,7 @@ public class MyFastJsonConfig {
 * 自定义MyFastJsonConfig，完成对*FastJsonHttpMessageConverterBean*的提供
 * *config.setSerializerFeatures*配置了JSON解析过程的一些细节，例如日期格式、数据编码、是否在生成的JSON中输出类名、是否输出value为null的数据、生成的JSON格式化、空集合输出`[]`而非null、空字符串输出`""`而非null等基础配置
 
-![](../images/spring boot + vue/fastjson中文乱码.png)
+![](images/spring boot + vue/fastjson中文乱码.png)
 
 现在还需要配置一下响应编码，否则返回的JSON中文会乱码，在*application.properties*中添加如下配置
 
@@ -1040,7 +1040,7 @@ spring:
       force-response: true
 ```
 
-![](../images/spring boot + vue/fastjson中文乱码-解决.png)
+![](images/spring boot + vue/fastjson中文乱码-解决.png)
 
 对于*FastJsonHttpMessageConverter*的配置，除了上面这种方式之外，还有另外一种方式。
 
@@ -1130,7 +1130,7 @@ static String[] getResourceLocations(String[] staticLocations) {
 
 在一个新创建的Spring Boot项目中，添加了*spring-boot-starter-web*依赖之后，在*resources*目录下分别创建四个目录，四个目录中放入同名的静态资源；
 
-![](../images/spring boot + vue/默认静态资源优先级.png)
+![](images/spring boot + vue/默认静态资源优先级.png)
 
 #### 4.2.2 自定义策略
 
@@ -1358,7 +1358,7 @@ Thymeleaf模板
 
 最后效果
 
-![](../images/spring boot + vue/自定义全局异常处理类返回Thymeleaf视图效果.png)
+![](images/spring boot + vue/自定义全局异常处理类返回Thymeleaf视图效果.png)
 
 #### 4.4.2 添加全局数据
 
@@ -1554,11 +1554,11 @@ DefaultErrorViewResolver类是Spring Boot中默认的错误信息视图解析器
 
 通过上述的介绍，自定义错误页其实很简单，提供4xx和5xx页面即可。如果开发者不需要向用户展示详细的错误信息，那么可以把错误信息定义成静态页面，直接在*resources/static*目录下创建error目录，然后在error目录中创建错误展示页面。错误展示页面的命名规则有两种：一种是4xx.html、5xx.html；另一种是直接使用响应码命名文件，例如404.html、405.html、500.html。第二种命名方式划分得更细，当出错时，不同的错误会展示不同的错误页面。
 
-![](../images/spring boot + vue/自定义静态错误页.png)
+![](images/spring boot + vue/自定义静态错误页.png)
 
 访问错误的路径，效果如下：
 
-![](../images/spring boot + vue/Custom404.png)
+![](images/spring boot + vue/Custom404.png)
 
 修改Contoller，提供一个会抛异常的请求；
 
@@ -1572,11 +1572,11 @@ public String error500() {
 
 访问后，会展示500.html的内容；
 
-![](../images/spring boot + vue/Custom500.png)
+![](images/spring boot + vue/Custom500.png)
 
 这种定义都是使用了静态HTML页面，无法向用户展示完整的错误信息，若采用视图模块技术，则可以向用户展示更多的错误信息，如果使用HTML模板，那么先引入模板相关的依赖，这里以Thymeleaf为例，Thymeleaf页面模板默认处于*classpath:/templates/*目录下，因此在该目录下先创建*error*目录，再创建错误展示页
 
-![](../images/spring boot + vue/模板错误页.png)
+![](images/spring boot + vue/模板错误页.png)
 
 页面代码如下
 
@@ -1601,11 +1601,11 @@ Spring Boot在这里一共返回了5条错误相关的信息，分别是`timesta
 
 此时，用户访问一个不存在的地址，4xx.html页面中的内容将被展示出来
 
-![](../images/spring boot + vue/4xx模板页面.png)
+![](images/spring boot + vue/4xx模板页面.png)
 
 访问一个会抛异常的地址
 
-![](../images/spring boot + vue/5xx模板页面.png)
+![](images/spring boot + vue/5xx模板页面.png)
 
 > 若用户定义了多个错误页面，则响应码.html页面的优先级高于4xx.html、5xx.html页面的优先级，即若当前是一个404错误，则优先展示404.html而不是4xx.html；动态页面的优先级高于静态页面，即若resources/templates和resources/static下同时定义了4xx.html，则优先展示resources/templates/4xx.html
 
@@ -1656,11 +1656,11 @@ public class MyErrorAttribute extends DefaultErrorAttributes {
 ..
 ```
 
-![](../images/spring boot + vue/新增customMsg错误信息字段.png)
+![](images/spring boot + vue/新增customMsg错误信息字段.png)
 
 使用PostMan查看返回的JSON错误信息
 
-![](../images/spring boot + vue/postman查看错误JSON.png)
+![](images/spring boot + vue/postman查看错误JSON.png)
 
 2. 自定义Error视图
 
@@ -1936,7 +1936,7 @@ server.port=8081
 
 启动项目，点击两个按钮
 
-![](../images/spring boot + vue/页面按钮发送请求cors.png)
+![](images/spring boot + vue/页面按钮发送请求cors.png)
 
 ### 4.7 配置类与XML配置
 
@@ -2369,11 +2369,11 @@ favicon.ico是浏览器选项卡左上角的图标，可以放在静态资源路
 
 将一张.ico图片重命名为favicon，复制到 **resources/static/**路径下
 
-![](../images/spring boot + vue/favicon.png)
+![](images/spring boot + vue/favicon.png)
 
 启动项目，查看效果
 
-![](../images/spring boot + vue/替换favicon效果.png)
+![](images/spring boot + vue/替换favicon效果.png)
 
 #### 4.13.3 除去某个自动配置
 
@@ -2724,7 +2724,7 @@ public interface BookMapper {
 
 启动项目
 
-![](../images/spring boot + vue/mybatis操作book表日志.png)
+![](images/spring boot + vue/mybatis操作book表日志.png)
 
 ### 5.3 整合Spring Data JPA
 
@@ -3751,7 +3751,7 @@ public class BookController {
    
    根据节点端口创建目录并配置各个节点配置；
    
-   ![](../images/spring boot + vue/redis集群配置.png)
+   ![](images/spring boot + vue/redis集群配置.png)
    
    以8001主节点的redis.conf为例
    
@@ -3895,9 +3895,9 @@ public class BookController {
    
    
 
-![](../images/spring boot + vue/cluster-info.png)
+![](images/spring boot + vue/cluster-info.png)
 
-![](../images/spring boot + vue/cluster-nodes.png)
+![](images/spring boot + vue/cluster-nodes.png)
 
 **添加主节点**
 
@@ -3915,11 +3915,11 @@ public class BookController {
 * 127.0.0.1:8004 表示新增的实例
 * 127.0.0.1:8001 表示集群中任意的节点实例
 
-![](../images/spring boot + vue/redis-add-node.png)
+![](images/spring boot + vue/redis-add-node.png)
 
 新增节点成功，redis-cli登陆后查看集群信息；可以看到新实例已经被添加到集群中，但是由于slot已经被之前的实例分配完了，新增加的实例没有slot，也就意味着新增加的实例没有存储数据的机会；此时需要从之前的master中拿出一部分slot分配给新实例；
 
-![](../images/spring boot + vue/新增master节点且未分配hashslot.png)
+![](images/spring boot + vue/新增master节点且未分配hashslot.png)
 
 首先，对slot重新分配；
 
@@ -3977,7 +3977,7 @@ Source node #1:all
 0.0.1:9004 127.0.0.1:8001
 ```
 
-![](../images/spring boot + vue/添加从节点成功.png)
+![](images/spring boot + vue/添加从节点成功.png)
 
 **删除节点**
 
@@ -4105,7 +4105,7 @@ public class RedisConfig {
 
 测试，启动项目，在浏览器中访问  `http://localhost/test`
 
-![](../images/spring boot + vue/redis集群控制台输出.png)
+![](images/spring boot + vue/redis集群控制台输出.png)
 
 ### 6.2 整合MongoDB
 
@@ -4312,7 +4312,7 @@ public class BookController {
 
 登录MongoDB服务器，认证身份后，可以查询到数据
 
-![](../images/spring boot + vue/登录mongodb查看book数据.png)
+![](images/spring boot + vue/登录mongodb查看book数据.png)
 
 6. 使用MongoTemplate
 
@@ -4357,7 +4357,7 @@ public class BookController {
 
 ### 6.3 Session共享
 
-![](../images/spring boot + vue/Session共享.png)
+![](images/spring boot + vue/Session共享.png)
 
 正常情况下，HttpSession是通过Servlet容器创建并存储在内存中的，如果需要对项目进行横向扩展搭建集群时，那么可以利用硬件或者软件来做负载均衡，此时来自同一用户的HTTP请求就有可能被分散到不同的实例上去，如何保证各个实例之间的Session同步就成为一个必须解决的问题。Spring Boot提供了自动化Session共享配置，它结合Redis可以非常方便地解决这个问题，使用Redis解决Session共享问题的原理非常简单，就是把原本存储在不同服务器上的Session拿出来存储在一个独立的服务器上。
 
@@ -4500,11 +4500,11 @@ make install
 
 当服务和Nginx都启动后，调用save接口
 
-![](../images/spring boot + vue/请求分发save.png)
+![](images/spring boot + vue/请求分发save.png)
 
 调用的端口是80，即调用的是Nginx服务器，请求会被Nginx转发到real server上进行处理，返回值为8081，说明真正处理请求的是8081那台服务器，接下来调用get获取数据
 
-![](../images/spring boot + vue/请求分发get.png)
+![](images/spring boot + vue/请求分发get.png)
 
 调用的端口依然是80，但是返回值是8080，说明是8080这台服务器提供的服务。
 
@@ -4624,13 +4624,13 @@ public interface JpaRepository<T, ID> extends PagingAndSortingRepository<T, ID>,
 
 RESTful服务构建成功后，默认的请求路径是实体类名小写再加上后缀，此时向数据库添加一条数据非常容易，发起一个Post请求，请求地址为localhost:8080/books
 
-![](../images/spring boot + vue/RESTful插入book数据.png)
+![](images/spring boot + vue/RESTful插入book数据.png)
 
 5. 查询测试
 
 查询请求是GET请求，分页查询的请求路径为/books
 
-![](../images/spring boot + vue/RESTful查询book数据.png)
+![](images/spring boot + vue/RESTful查询book数据.png)
 
 如果要根据id查询可以在请求后面加上id值
 
@@ -4644,15 +4644,15 @@ http://localhost:8080/books/2
 http://localhost:8080/books?page=0&size=3
 ```
 
-![](../images/spring boot + vue/RESTful分页查询book数据.png)
+![](images/spring boot + vue/RESTful分页查询book数据.png)
 
 分页查询的同时还可以根据id排序查询
 
-![](../images/spring boot + vue/RESTful分页查询book数据并排序.png)
+![](images/spring boot + vue/RESTful分页查询book数据并排序.png)
 
 发送PUT请求，根据id修改数据
 
-![](../images/spring boot + vue/RESTful修改book数据.png)
+![](images/spring boot + vue/RESTful修改book数据.png)
 
 发送DELETE请求可以实现对数据的删除操作
 
@@ -4674,7 +4674,7 @@ public interface BookRepository extends JpaRepository<Book, Integer> {
 
 path属性表示将所有的请求路径中的books都转换成bks，如localhost:8080/bks；collectionResourceRel属性表示返回JSON集合中的key修改为bk，itemResourceRel属性表示将返回的JSON集合中的单个book的key修改为book
 
-![](../images/spring boot + vue/RESTful自定义请求路径.png)
+![](images/spring boot + vue/RESTful自定义请求路径.png)
 
 #### 7.2.3 自定义查询方法
 
@@ -4694,7 +4694,7 @@ public interface BookRepository extends JpaRepository<Book, Integer> {
 * 自定义查询只需要在BookRepository中定义相关查询方法即可，方法定义好之后可以不添加@RestResource注解，默认路径就是方法名，如果想要自定义路径，只需要添加@RestResource注解，path属性为最新路径，rel表示实体中映射的属性名
 * 直接访问localhost:8080/bks/search可以查看暴露了哪些查询方法
 
-![](../images/spring boot + vue/RESTful查看自定义查询.png)
+![](images/spring boot + vue/RESTful查看自定义查询.png)
 
 #### 7.2.4 隐藏方法
 
@@ -4847,11 +4847,11 @@ Spring Boot中提供了一组开发工具spring-boot-devtools，可以提高开�
 
 单击File -> Settings 菜单，打开Settings 页面，在左边的菜单栏找到Build，Execution，Deployment -> Compile，勾选Build project automatically
 
-![](../images/spring boot + vue/IDEA自动编译.png)
+![](images/spring boot + vue/IDEA自动编译.png)
 
 按Ctrl + Shift + Alt + / 快捷键，调出Maintenance界面
 
-![](../images/spring boot + vue/Maintenance界面.png)
+![](images/spring boot + vue/Maintenance界面.png)
 
 单击Registry，在新打开的Registry页面中，勾选compiler.automake.allow.when.app.running复选框
 
@@ -4861,7 +4861,7 @@ Spring Boot中提供了一组开发工具spring-boot-devtools，可以提高开�
 
 > classpath路径下的静态资源或者视图模板等变化时，并不会导致项目重启
 
-![](../images/spring boot + vue/Registry界面.png)
+![](images/spring boot + vue/Registry界面.png)
 
 #### 8.2.2 基本原理
 
@@ -5593,7 +5593,7 @@ public class BookCacheTest {
 
 访问redis集群查看缓存数据；
 
-![](../images/spring boot + vue/redis集群缓存.png)
+![](images/spring boot + vue/redis集群缓存.png)
 
 ## 10.0 Spring Boot安全管理
 
@@ -5650,7 +5650,7 @@ public class HelloController {
 
 启动项目，访问/hello或者/Laugh.jpg会跳转到登陆页面，这个登陆页面是由Spring Security提供的
 
-![](../images/spring boot + vue/SpringSecurity登陆页面.png)
+![](images/spring boot + vue/SpringSecurity登陆页面.png)
 
 默认的用户名是`user`；默认的登陆密码则是每次启动项目时，随机生成的
 
@@ -5938,11 +5938,11 @@ public class HelloController {
 
 测试登陆，登陆成功返回账号信息；
 
-![](../images/spring boot + vue/SpringSecurity登陆成功.png)
+![](images/spring boot + vue/SpringSecurity登陆成功.png)
 
 使用过期的账号登陆
 
-![](../images/spring boot + vue/SpringSecurity账号过期.png)
+![](images/spring boot + vue/SpringSecurity账号过期.png)
 
 #### 10.1.6 注销登陆配置
 
@@ -6103,7 +6103,7 @@ public class HelloController {
 * 配置一个LogoutHandler，可以在其中完成一些数据清楚工作，例如Cookie的清除，Spring Security提供了一些常见的实现
 * LogoutSuccessHandler可以在这里处理注销成功后的业务逻辑，例如返回一段JSON提示或者跳转到登陆页等
 
-![](../images/spring boot + vue/LogoutHandler实现类.png)
+![](images/spring boot + vue/LogoutHandler实现类.png)
 
 #### 10.1.7 多个HttpSecurity
 
@@ -6238,7 +6238,7 @@ public class HelloServiceImpl implements HelloService {
 
 首先需要设计一个基本的用户角色表，一共三张表，分别是用户表、角色表以及用户角色关联表。为了方便测试，预置几条测试数据
 
-![](../images/spring boot + vue/springsecurity数据库设计.png)
+![](images/spring boot + vue/springsecurity数据库设计.png)
 
 ```sql
 CREATE TABLE user 
@@ -6806,7 +6806,7 @@ OAuth 2 的授权流程到底是什么样的呢？
 
 这是一个大致的流程，因为OAuth 2中有四种不同的授权模式，每种授权模式的授权流程又会有差异，基本流程如下：
 
-![](../images/spring boot + vue/OAuth授权基本流程.png)
+![](images/spring boot + vue/OAuth授权基本流程.png)
 
 #### 10.4.4 授权模式
 
@@ -7072,15 +7072,15 @@ client_secret:123456
 
 接下来访问所有资源，携带上access_token参数即可，例如`/user/hello`接口
 
-![](../images/spring boot + vue/OAuth授权-测试-1.png)
+![](images/spring boot + vue/OAuth授权-测试-1.png)
 
 如果访问一个非法资源，例如admin用户访问`/user/hello`接口
 
-![](../images/spring boot + vue/OAuth授权-测试-2.png)
+![](images/spring boot + vue/OAuth授权-测试-2.png)
 
 最后，再来看一下Redis中的数据
 
-![](../images/spring boot + vue/OAuth授权-Redis缓存accessToken.png)
+![](images/spring boot + vue/OAuth授权-Redis缓存accessToken.png)
 
 到此，一个password模式的OAuth认证体系就搭建成功了。
 
@@ -7353,13 +7353,13 @@ login页面是一个普通的登陆页面，在登陆失败时，展示登陆失
 
 配置完成后，启动项目，访问登陆页面，分别使用两个账号登陆；
 
-![](../images/spring boot + vue/Shiro-Ding.png)
+![](images/spring boot + vue/Shiro-Ding.png)
 
-![](../images/spring boot + vue/Shiro-Admin.png)
+![](images/spring boot + vue/Shiro-Admin.png)
 
 当user用户访问admin的接口时
 
-![](../images/spring boot + vue/Shiro-unauthorized.png)
+![](images/spring boot + vue/Shiro-unauthorized.png)
 
 ### 10.6 小结
 

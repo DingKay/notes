@@ -63,7 +63,7 @@
 
   ### IDEA的安装总结
 
-  ---
+---
 
   从安装上来看，Intellij IDEA对硬件的要求似乎不是很高，可是实际在开发过程中并不是这样的，因为Intellij IDEA在执行时会有大量的缓存、索引文件，所以如果你正在使用Eclipse、MyEclipse 想通过Intellij IEDA来缓解计算机的卡、慢等问题，这基本上是不可能的，本质上应该对硬件进行升级。
 
@@ -89,7 +89,7 @@
 
     `IDEA中的 Project ≈ Eclipse 中的WorkSpace`
 
-    * IDEA 的Module(模块) ≈ Eclipse 的Project![IDEA的Module](..\images\IDEA\IDEA的Module.png)
+    * IDEA 的Module(模块) ≈ Eclipse 的Project![IDEA的Module](images\IDEA的Module.png)
 
       Tips：*Module的删除需要再Module Setting中先移除--再删除*
 
@@ -99,7 +99,7 @@
 
   ### IDEA的常用配置
 
-  ---
+---
 
   * Appearance & Behavior(外观和行为)：
 
@@ -149,7 +149,7 @@
 
     ···
 
-  ---
+---
 
   # IDEA 的快捷键
 
@@ -194,7 +194,7 @@
 
 定义属性快捷模板：
 
-* private static final **`prsf`** ==当定义了一个private私有的变量在Module(模块)中，project(工程)可以使用Module(模块)下的私有属性，不过需要在iml文件中配置，快捷键为 `alt + enter`  ==Add dependency on module 'xxx'==![](..\images\IDEA\Module增加依赖.png)
+* private static final **`prsf`** ==当定义了一个private私有的变量在Module(模块)中，project(工程)可以使用Module(模块)下的私有属性，不过需要在iml文件中配置，快捷键为 `alt + enter`  ==Add dependency on module 'xxx'==![](images\Module增加依赖.png)
 
 * public static final **`psf`**
 * public static final int **`psfi`**

@@ -11,11 +11,11 @@
 * Java语言的特点：跨平台<br>
 通过Java的编译器编译成了Class文件以后，在不同主机上面运行Java的执行文件时，由不同版本的JVM来处理Class文件。(所以是简介实现了跨平台，由不同版本的Jvm最终执行成不同系统所能识别的系统命令)<br>
 
-![Java的特点：跨平台](..\images/Java/Java语言的特点-跨平台.png)<br>
+![Java的特点：跨平台](images/Java/Java语言的特点-跨平台.png)<br>
 
 * Java的编译流程<br>
 
-![](..\images/Java/Java编译.png)
+![](images/Java/Java编译.png)
 
 ---
 
@@ -109,7 +109,7 @@ Java中的注释格式:<br>
 
 ### 基本数据类型
 
-![](../images/Java/数据类型图.png)
+![](images/Java/数据类型图.png)
 
 `byte short int long float double boolean char`
 
@@ -177,7 +177,7 @@ out:exampleCharValue : \u0023 => #
 ```
 
 以下是一张`ASCII`码表：<br>
-![](../images/Java/ASCII表.png)
+![](images/Java/ASCII表.png)
 
 ### 引用数据类型
 
@@ -195,11 +195,11 @@ Java中有一个特殊的常量`null`<br>
 只有一个数值就是：`null`它可以被转换成任意的引用类型。
 
 以下是一张再Java中定义变量开辟的内存概念图<br>
-![](../images/Java/变量概念图.png)
+![](images/Java/变量概念图.png)
 
 ### 运算符
 
-![](../images/Java/算术运算符.jpg)
+![](images/Java/算术运算符.jpg)
 
 * 比较运算符`> 大于 < 小于 <= 小于等于 >= 大于等于 == 等于 !=不等于` 	
 
