@@ -186,3 +186,56 @@ Tips:在非项目路径下执行 go build，需要将 GO111MODULE 修改为 off 
 
 编译并将二进制程序复制到 `$GOPATH/bin` 路径中： `go install`，同样 `go install` 命令在非项目路径下执行，在命令后加上目路径即可。由于我们将 `$GOPATH/bin` 添加到了 `$PATH` 环境变量中，我们可以在任何路径下执行我们编译后的二进制可执行文件。
 
+## 基本语法
+
+### 包
+
+每一段 Go 程序都 **必须** 属于一个包。一个标准的可执行的 Go 程序必须有 `package main` 的声明。如果一段程序是属于 main 包的，那么当执行 `go install` 的时候就会将其生成二进制文件，当执行这个文件时，就会调用 main 函数。如果一段程序是属于 main 以外的其他包，那么当执行 `go install` 的时候，就会创建一个 `包管理` 文件。
+
+```
+包的声明并非一定要与包名同名。因此，你可能会发现很多包的包名（文件夹名）与其内部声明的名字是不同的。当引用包的时候，需要使用包的声明来作为引用变量。
+```
+
+执行 `go install` 后，首先会在当前目录寻找 ` package main` 包声明的文件，Go就会将其编译成可执行的二进制文件。并将其复制到 `$GOPATH/src/bin` 路径下，一个包里面有很多的文件，但只能有一个 `main` 函数，其标志着一个程序的入口。
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("pkg/main/main.go => print")
+}
+```
+
+![编译main包为可执行程序](images/go_install_编译main包为可执行程序.png)
+
+如果没有 `main` 包声明的文件，那么Go就会在 `$GOPATH/pkg` 路径下创建 `包管理` （后缀 `.a`）文件。
+
+```go
+package app
+
+import "fmt"
+
+func main() {
+	fmt.Println("pkg/appPrint/app.go => print")
+}
+```
+
+则 `$GOPATH/pkg/windows_amd64/github.com/dingkay/study/day01/pkg` 
+
+![编译非main包为包管理文件](images/go_install_编译非main包为包管理文件.png)
+
+### 包的命名规范
+
+关于包的命名，Go 团队建议以简单，扁平为原则。例如， `strutils` 是 `string utility` 函数的名字， `http` 是 `HTTP` 请求的名字。
+
+包的名字应避免使用下划线，中划线或掺杂大写字母。
+
+### 创建包
+
+包分为两种：
+
+可执行的包（main包）：可执行的包可以看作是主应用，编译后为可执行的程序。
+
+工具包（非main包）：工具包自身是不可执行的，但是它会给主应用（可执行的包）增加一些功能，从而起到扩展主应用的作用。
