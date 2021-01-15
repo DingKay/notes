@@ -333,6 +333,54 @@ func main() {
 
 输出结果：![包的嵌套](images/包的嵌套.png)
 
+#### 包的别名
+
+当引用包的时候，Go会根据包的声明来创建包的全局变量。如果引用多个重名包，就会导致冲突。
+
+因此，我们需要使用 **包的别名**。在关键字 `import` 和包名之间，声明一个变量名，用以表示这个包。
+
+```go
+// pkgalias/greet
+package greet
+
+var Message = "i am pkgalias greet."
+// pkgalias/greet/greet
+package greet
+
+var Message = "i am pkgalias/greet greet."
+```
+
+main.go
+
+```go
+package main
+
+import (
+	"fmt"
+
+	_ "github.com/dingkay/study/day01/pkgalias/greet"
+	subgreet "github.com/dingkay/study/day01/pkgalias/greet/greet"
+)
+
+func main() {
+	fmt.Println(subgreet.Message)
+}
+```
+
+在 Go 中，下划线是一个特殊的符号，表示 null 容器。如果我们引用了 greet 包，但是暂时没有用到它，Go 在编译的时候就会抱怨这个问题。为了避免这个问题，我们就可以把暂时用不到的引用放在 _ 中，这样编译器就会忽略它。
+
+给一个包加上 **下划线** 别名看似没有意义，但其实在某些情况下还是很有用的，比如在包初始化时用不到的变量。
+
+#### 安装第三方包
+
+例如将包发布到 `github.com` 上，本地下载的命令：
+
+```
+go get -u github.com/dingkay/study-go
+```
+
+上面这个命令的意思是，从 `https://github.com/dingkay/study-go` URL中引用文件，并保存到 `%GOPATH/src/github.com/dingkay/study-go` 目录中。
+
 ### 变量初始化
 
 如果变量 `a` 依赖 `b` ，那么就要先初始化变量 `b`，否则无法编译。Go在函数内部会遵循这个原则
@@ -481,5 +529,207 @@ func main() {
 
 执行结果：![](images/init在包scope执行顺序.png)
 
- 当所有的 `init` 函数被执行以后，`main` 函数才会被执行。因此，**`**init**` 函数 的主要工作就是，初始化无法在全局范围内初始化的全局变量** 。例如，初始化数组。 
+ 当所有的 `init` 函数被执行以后，`main` 函数才会被执行。因此， `init` 函数 的主要工作就是，初始化无法在全局范围内初始化的全局变量** 。例如，初始化数组。 
+
+```go
+package main
+
+import "fmt"
+
+var arr [10]int
+
+func init() {
+	fmt.Println("main init arr")
+	for i := 0; i < 10; i++ {
+		arr[i] = i
+	}
+}
+
+func main() {
+	fmt.Println("main.go ==> start")
+	fmt.Println(arr)
+}
+```
+
+![初始化数组](images/init初始化数组.png)
+
+特别强调一点，**被引用的包只能被初始化一次**。因此，如果你在一个包中，要引入很多包，每个被引用的包都只能在 main 包的生命周期中被初始化一次。
+
+### 程序执行顺序
+
+```
+go run *.go
+├── 执行 Main 包
+├── 初始化所有引用的包
+|  ├── 初始化所有引用的包 (recursive definition)
+|  ├── 初始化全局变量
+|  └── 以词法文件名的顺序调用 init 函数
+└── 初始化 Main 包
+   ├── 初始化全局变量
+   └── 以词法文件名的顺序调用 init 函数
+```
+
+下面是一小例子：
+
+```go
+//declaration/version/version.go
+package version
+
+import "fmt"
+
+func init() {
+	fmt.Println("version/version.go ==> init")
+}
+
+var Version = "v1.2.1"
+
+//declaration/version/fetch.go
+package version
+
+import "fmt"
+
+var FerchVersion = fetchVersion()
+
+func init() {
+	fmt.Println("version/ferch.go ==> init")
+}
+
+func fetchVersion() string {
+	fmt.Println("version/fetch.go fetchVersion")
+	return Version
+}
+**************************************************
+//declaration/entry.go
+package main
+
+import (
+	"fmt"
+
+	"github.com/dingkay/study/day01/declaration/version"
+)
+
+func init() {
+	fmt.Println("declartion/entry.go ==> init")
+}
+
+func getVersion() string {
+	fmt.Println("declartion/entry.go getVersion")
+	return version.Version
+}
+//declaration/main.go
+package main
+
+import "fmt"
+
+func init() {
+	fmt.Println("declartion/main.go ==> init")
+}
+
+var myVersion = getVersion()
+
+func main() {
+	fmt.Println("declartion/main.go myVersion => " + myVersion)
+}
+```
+
+执行结果：![](images/执行顺序.png)
+
+`go run main.go entry.go` 首先根据 `package main` 知道编译成可执行文件（` go run` 编译的可执行文件存放于临时目录中），再寻找 `main` 方法的入口，递归查找依赖的 **包**，初始化 `version` 包，`fetch.go` 以及 `fetch.go` 中的全局变量首先初始化，其次是根据**文件名**的字母顺序，依此执行 `init` 初始化方法，依此规则，向上初始化 `main` 包，由于 `entry.go` 文件中没有全局变量需要初始化，但 `main.go` 文件中的全局变量依赖 `entry.go` 中的方法，故打印的输出是 `entry.go` 中的 **getVersion**，变量初始化结束后，则依据规则初始化 `init`，最后执行 `main` 方法的输出。
+
+### 注释
+
+Go 的注释规则跟 `JavaScript` 或 `c++` 一样。单行注释用 `//comment`，多行注释用 `/*comment*/`。
+
+```
+// 单行注释
+// 有一条单行注释
+
+/*
+    这里是多行注释。
+*/
+```
+
+### 分号
+
+Go 的语法也是用分号来标记一个语句的结局，但与 C 不同的是，分号不需要写在源码里。因为 Go 的 Lexer 程序会在扫描程序的时候，根据一定的规则自动插入分号。
+
+插入分号的规则是，如果换行符之前的最后一个标记是标识符（ 包括像 *int* 和 *float64* ），普通的字符像 数字 或 字符串，或者下面标记中的任意一个
+
+```
+break continue fallthrough return ++ -- ) }
+```
+
+**Lexer** 就会在标记后面插入分号。一句话总结， “**如果换行符在可能结束语句的标记之后，则插入分号**”.
+
+所以，Go 是不需要写分号的。如果你不小心写了分号，VSCode 插件也会在保存时把分号去掉。你也可以使用 [**gofmt**](https://golang.org/cmd/gofmt/) 命令来格式化代码。唯一需要用到分号的地方就是 switch 语句和 for 循环。因为必须用分号来明确指出在哪里结束语句。
+
+例如：
+
+```
+package main
+
+import (
+	_ "fmt" _ "math"
+)
+
+func main() {}
+```
+
+`go build` 时，会提示缺少分号；
+
+![](images/分号.png)
+
+当 `_ "fmt" _ "math"` 分两行写时，或者在中间添加 `;` 标识，则可以通过编译
+
+```go
+package main
+
+import(
+    "fmt"                           // ;
+    "math"                          // ;
+)                                   // ;
+
+func main() {
+    fmt.Println(math.Sqrt(16))      // ;
+}                                   // ;
+```
+
+Go 是一门非常注重简洁和系统性的语言。所以你的代码必须遵守社区准则和 Go 的规则。 [gofmt](https://golang.org/cmd/gofmt/) 是一个可以自动格式化代码的工具，可以帮助你书写更加规范的 Go 代码。
+
+### 变量&数据类型
+
+#### 标识符
+
+Go语言中标识符由字母数字和`_`(下划线）组成，并且只能以字母和`_`开头。 举几个例子：`abc`, `_`, `_123`, `a123`。
+
+Go语言中有25个关键字：
+
+```go
+    break        default      func         interface    select
+    case         defer        go          map        struct
+    chan         else         goto        package      switch
+    const        fallthrough    if          range        type
+    continue      for         import       return       var
+```
+
+此外，Go语言中还有37个保留字：
+
+```
+    Constants:    true  false  iota  nil
+
+       Types:    int  int8  int16  int32  int64  
+               uint  uint8  uint16  uint32  uint64  uintptr
+               float32  float64  complex128  complex64
+               bool  byte  rune  string  error
+
+    Functions:   make  len  cap  new  append  copy  close  delete
+                 complex  real  imag
+                 panic  recover
+```
+
+#### 变量
+
+Go语言中的变量需要声明后才能使用，同一作用域内不支持重复声明。 并且Go语言的变量声明后必须使用。
+
+##### 标准声明
 
