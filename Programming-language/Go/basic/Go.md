@@ -632,7 +632,7 @@ func main() {
 }
 ```
 
-执行结果：![](images/执行顺序.png)
+执行结果：![初始化执行顺序](images/执行顺序.png)
 
 `go run main.go entry.go` 首先根据 `package main` 知道编译成可执行文件（` go run` 编译的可执行文件存放于临时目录中），再寻找 `main` 方法的入口，递归查找依赖的 **包**，初始化 `version` 包，`fetch.go` 以及 `fetch.go` 中的全局变量首先初始化，其次是根据**文件名**的字母顺序，依此执行 `init` 初始化方法，依此规则，向上初始化 `main` 包，由于 `entry.go` 文件中没有全局变量需要初始化，但 `main.go` 文件中的全局变量依赖 `entry.go` 中的方法，故打印的输出是 `entry.go` 中的 **getVersion**，变量初始化结束后，则依据规则初始化 `init`，最后执行 `main` 方法的输出。
 
@@ -677,7 +677,7 @@ func main() {}
 
 `go build` 时，会提示缺少分号；
 
-![](images/分号.png)
+![Go语言分号](images/分号.png)
 
 当 `_ "fmt" _ "math"` 分两行写时，或者在中间添加 `;` 标识，则可以通过编译
 
@@ -764,11 +764,237 @@ Go语言中有25个关键字：
 
 #### 变量
 
-Go语言中的变量需要声明后才能使用，同一作用域内不支持重复声明。 并且Go语言的变量 `声明后必须使用`。
+Go语言中的变量需要声明后才能使用，同一作用域内不支持重复声明。 并且Go语言的变量 `声明后局部变量必须使用`。
 
-##### 标准声明
+```go
+package main
+
+var name = "Ding"
+
+var (
+	age    int  = 23
+	gender byte = 1
+)
+
+func main() {
+	var a = 10
+}
+```
+
+![声明的局部变量必须使用](images/声明的局部变量必须使用.png)
+
+全局变量可以声明但不使用，局部变量声明了后必须有地方引用，不然编译时会提示错误信息。
+
+##### 变量声明
 
 标准的声明格式如下：
 
 `var 变量名 数据类型 = 值` 使用关键字 `var` 声明变量
+
+在声明时也可以不带数据类型，Go语言会根据赋予的初始值默认类型推导出相应的类型。
+
+```go
+package main
+
+import "fmt"
+
+// 在一条语句中，同时声明多个同类型的变量同时赋值
+var var1, var2, var3 int = 3, 4, 5
+// 去掉数据类型，让 go 自动推导出变量的类型
+var var4, var5, var6 = 1, 2.2, false
+
+func main() {
+	// 标准声明
+	var bol bool = true
+	// 类型推导（根据值判断该变量是什么类型）
+	var str = "string type"
+	// 简短声明
+	a := "a word"
+	// 批量声明
+	var (
+		test1        = "test1"
+		test2 string = "test2"
+	)
+	var7, var8, var9 := 1, 2, 3
+	fmt.Println(bol)
+	fmt.Println(str)
+	fmt.Println(a)
+	fmt.Println(test1 + test2)
+	fmt.Println(var7 + var8 + var9)
+}
+```
+
+其中， `简短声明 :=` 只能在函数里面使用。 `:=` 符号左侧的变量中，必须至少有一个变量是第一次声明的变量。 
+
+ 通过这种简写语法，可以非常方便地实现在运行时给新变量赋值。比如像下面这样，把一个函数的返回值直接赋值给新变量。 
+
+```go
+package main
+
+import (
+	"fmt"
+	"math"
+)
+
+func main() {
+	a, b := 145.8, 543.8
+	c := math.Min(a, b)
+	fmt.Println("minimum value is ", c)
+}
+```
+
+
+
+##### 变量名称的约定
+
+ 关于变量的命名，Go 建议用 `单个` 单词或者 `小驼峰` 的形式。用 `下划线` 不会产生语法错误，但是不推荐。 
+
+##### 类型转换
+
+ Go 不支持不同类型变量之间的加减法等任何算数运算。要想进行算数运算，必须先转成同样的数据类型。Go 支持这种数据类型转换， 语法格式为 `type(var)`. 
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+	var1 := 10   // int
+	var2 := 10.5 // float
+
+	// 非法的
+	// var3 := var1 + var2
+
+	// 合法的
+	var3 := var1 + int(var2) // var3 == 20
+
+	fmt.Println(var3)
+}
+```
+
+
+
+##### 类型别名
+
+ 只要按照下面的语法格式，就可以对任何系统自带的或用户自定义的类型声明别名
+
+` type aliasName aliasTo `
+
+在上面的语法格式中，`aliasName` 是你想要自定义的类型别名。 `aliasTo` 是定义新类型的参照类型。
+
+例如，你想要自定义一个跟 `float64` 功能一样的 `float` 类型，就可以这样声明
+
+` type float float64 `
+
+在上面的程序中，Go 会创建一个 `float64` 的副本，并命名为 `float` 类型。你可以像使用普通的 Go 类型一样，使用这个类型来声明变量。由于 Go 自身没有 `float` 类型名，而我又很讨厌每次都要写 `float64`，所以我通常都会这么自定义一下。
+
+```go
+package main
+
+import "fmt"
+
+type float float64
+
+func main() {
+	var f float = 52.2
+
+	fmt.Printf("f has value %v and type %T", f, f)
+}
+```
+
+在上面的代码中，我们把 `float` 定义为 `float64` 类型的别名，并创建了一个名为 `f`，类型为 `float`，初始值为 `52.2` 的变量。
+
+输出：![类型别名](images/类型别名.png)
+
+如果自定义的类型别名的首字母是小写字母，那么这个类型就不能被其他包所引用。
+
+而且，尽管上面定义的 `float` 和 `float64` 有着同样的属性，但是两个类型的值也是不能做比较运算的，因为它们是不同的类型。
+
+```go
+package main
+
+import "fmt"
+
+type float float64
+
+func main() {
+	var f float = 52.2
+	var g float64 = 52.2
+
+    // fmt.Println("f == g", float64(f) == g)
+	fmt.Println("f == g", f == g)
+}
+```
+
+编译输出：![别名类型比较](images/别名类型比较.png)
+
+
+
+#### 常量
+
+ 在 Go 中，常量就是有固定值的变量。任何试图改变常量值的行为都会引起运行出错。常量必须用 `const` 关键字声明并赋值。 
+
+`  const const_name [data_type] = constant_value `
+
+```
+在 Go 中，必须在开始编译之前给常量赋值。不能用函数的返回值给常量赋值。 const a = math.Sqrt(4) 是非法语句，因为 a 的值是要在运行中计算出来的。
+```
+
+##### 批量声明常量
+
+ 像变量一样，也可以在一个语句中，同时声明多个常量。 
+
+```go
+package main
+
+import "fmt"
+
+const constant = "constant value"
+
+const (
+	constant1 = "constant value1"
+	constant2 = "constant value2"
+)
+
+const (
+	a = 1 // a==1
+	b = 2 // b==2
+	c     // c==2
+	d     // d==2
+)
+
+func main() {
+	fmt.Println(a, b, c, d)
+}
+```
+
+ 在带括号的 const 声明中，可以隐式重复表达式 - 这表示 `重复前面的表达式`。 
+
+所以，`c` 与 `d` 的值等于 `b` 的值
+
+![](images/批量声明常量.png)
+
+##### iota
+
+ Go 的关键字 `iota` 可以用来声明枚举常量。这个关键字可以生成一系列自增值，从 0 开始，每次增加 1。 
+
+```go
+const (
+	a = iota // a == 0
+	b = iota // b == 1
+	c = iota // c == 2
+	d        // d == 3 ( 相当于 d = iota )
+)
+```
+
+ 可以用  `_ ( 空白标识符 )` 跳过值。 `_` 会接收 `iota + 1` 的值，然后丢弃。 
+
+```go
+const (
+    a1 = iota + 1 // iota =0; a == 0 + 1
+    _             // iota =1;(implicitly _ = iota + 1 )
+    b1            // iota =2;b == 3 (implicitly b = iota + 1 )
+    c1            // iota =3;c == 4 (implicitly c = iota + 1 )
+)
+```
 
