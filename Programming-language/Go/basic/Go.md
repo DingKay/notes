@@ -124,7 +124,7 @@ go env -w GOPROXY=https://goproxy.cn,direct
 
 这使得Go默认管理依赖的方式变成了 go module 模式，即依赖一个 go.mod 文件，其中描述了项目依赖的包和版本（类似于npm package.json，Java的maven pom.xml）
 
-而目录中没有 go.mod 文件，所以Go不知道主模块时什么，所以无法编译
+而目录中没有 go.mod 文件，所以Go不知道主模块是什么，所以无法编译
 
 go语言在诞生之时，没有提供随之的包管理工具，而是使用 `go get` 来下载依赖包，并放在`$GOPATH/src`下，并且没有使用版本控制，每次都会拉取master分支的代码，软件包的代码放在src/github.com/xx/xx下面 
 
@@ -367,7 +367,7 @@ func main() {
 }
 ```
 
-在 Go 中，下划线是一个特殊的符号，表示 null 容器。如果我们引用了 greet 包，但是暂时没有用到它，Go 在编译的时候就会抱怨这个问题。为了避免这个问题，我们就可以把暂时用不到的引用放在 _ 中，这样编译器就会忽略它。
+在 Go 中，下划线是一个特殊的符号，表示 null 容器。如果我们引用了 greet 包，但是暂时没有用到它，Go 在编译的时候就会抛出这个问题。为了避免这个问题，我们就可以把暂时用不到的引用放在 _ 中，这样编译器就会忽略它。
 
 给一个包加上 **下划线** 别名看似没有意义，但其实在某些情况下还是很有用的，比如在包初始化时用不到的变量。
 
@@ -529,7 +529,7 @@ func main() {
 
 执行结果：![](images/init在包scope执行顺序.png)
 
- 当所有的 `init` 函数被执行以后，`main` 函数才会被执行。因此， `init` 函数 的主要工作就是，初始化无法在全局范围内初始化的全局变量** 。例如，初始化数组。 
+ 当所有的 `init` 函数被执行以后，`main` 函数才会被执行。因此， `init` 函数 的主要工作就是，初始化无法在全局范围内初始化的**全局变量** 。例如，初始化数组。 
 
 ```go
 package main
@@ -727,11 +727,52 @@ Go包含很多种数据类型：
 | byte       | `uint8` 的别名。                                             | 0             |
 | rune       | `int32` 的别名。它代表一个 Unicode 字符。                    | 0             |
 
+#### 特殊整型
+
+`uint`、`int`、在不同的操作系统上可存储的大小是不同的，在32位操作系统上是**int32**，在64位操作系统上是**int64**
+
+`uintptr`无符号整型，用于存放一个指针
+
+注意：在使用`int`或者`uint`时，不能假定它为32位或者64位，需要考虑在不同平台上面的差异性。
+
+获取对象的长度的内建`len()`函数返回的长度可以根据不同平台的字节长度进行变化。实际使用中，切片或 map 的元素数量等都可以用`int`来表示。在涉及到二进制传输、读写文件的结构描述时，为了保持文件的结构不会受到不同编译目标平台字节长度的影响，不要使用`int`和 `uint`。 
+
 #### 零值
 
 在其他编程语言中，对于未初始化的变量，系统会赋予其 `null` 或者 `undefined`，在 go 中， 则是赋给这些变量符合其数据类型的零值。参照上表，布尔类型的变量就会被赋值为 `false`，整形变量会被赋值为 `0`。
 
+#### 数字字面量语法（Number literals syntax）
 
+Go1.13版本之后引入了数字字面量语法，这样便于开发者以二进制、八进制或十六进制浮点数的格式定义数字，例如：
+
+`v := 0b00101101`， 代表二进制的 101101，相当于十进制的 45。 `v := 0o377`，代表八进制的 377，相当于十进制的 255。 `v := 0x1p-2`，代表十六进制的 1 除以 2²，也就是 0.25。
+
+而且还允许我们用 `_` 来分隔数字，比如说： `v := 123_456` 表示 v 的值等于 123456。
+
+我们可以借助fmt函数来将一个整数以不同进制形式展示。
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+	// 十进制
+	var a int = 10
+	fmt.Printf("%d \n", a)
+	fmt.Printf("%b \n", a)
+
+	// 八进制
+	var b int = 077
+	fmt.Printf("%o \n", b)
+	fmt.Printf("%d \n", b)
+
+	// 十六进制
+	var c int = 0xff
+	fmt.Printf("%x \n", c)
+	fmt.Printf("%X \n", c)
+}
+```
 
 #### 标识符
 
@@ -741,10 +782,10 @@ Go语言中有25个关键字：
 
 ```go
     break        default      func         interface    select
-    case         defer        go          map        struct
-    chan         else         goto        package      switch
-    const        fallthrough    if          range        type
-    continue      for         import       return       var
+    case         defer        go           map          struct
+    chan         else         goto         package      switch
+    const        fallthrough  if           range        type
+    continue     for          import       return       var
 ```
 
 此外，Go语言中还有37个保留字：
@@ -976,7 +1017,7 @@ func main() {
 
 ##### iota
 
- Go 的关键字 `iota` 可以用来声明枚举常量。这个关键字可以生成一系列自增值，从 0 开始，每次增加 1。 
+ Go 的关键字 `iota` 可以用来声明枚举常量。这个关键字可以生成一系列自增值，从 0 开始，每次声明增加 1。 
 
 ```go
 const (
@@ -998,3 +1039,118 @@ const (
 )
 ```
 
+
+
+### 字符串
+
+ Go语言中的字符串以原生数据类型出现，使用字符串就像使用其他原生数据类型（int、bool、float32、float64 等）一样。 Go 语言里的字符串的内部实现使用`UTF-8`编码。 字符串的值为`双引号(")`中的内容，可以在Go语言的源码中直接添加非ASCII码字符，例如： 
+
+```go
+var t1 string = "中文"
+var t2 string = "en"
+```
+
+#### 字符串转义
+
+Go 语言的字符串常见转义符包含回车、换行、单双引号、制表符等，如下表所示。
+
+| 转义符 |                含义                |
+| :----: | :--------------------------------: |
+|  `\r`  |         回车符（返回行首）         |
+|  `\n`  | 换行符（直接跳到下一行的同列位置） |
+|  `\t`  |               制表符               |
+|  `\'`  |               单引号               |
+|  `\"`  |               双引号               |
+|  `\\`  |               反斜杠               |
+
+举个例子，我们要打印一个Windows平台下的一个文件路径：
+
+```go
+var s1 string = "c:\\User\\go"
+fmt.Println(s1)
+```
+
+#### 多行字符串
+
+ Go语言中要定义一个多行字符串时，就必须使用`反引号`字符：
+
+```go
+var s2 string = `
+	c:\User\go
+	hello
+	`
+fmt.Println(s2)
+```
+
+ 反引号间换行将被作为字符串中的换行，但是所有的转义字符均无效，文本将会原样输出。 
+
+#### 字符串的常用操作
+
+|                方法                 |      介绍      |
+| :---------------------------------: | :------------: |
+|              len(str)               |     求长度     |
+|           +或fmt.Sprintf            |   拼接字符串   |
+|            strings.Split            |      分割      |
+|          strings.contains           |  判断是否包含  |
+| strings.HasPrefix,strings.HasSuffix | 前缀/后缀判断  |
+| strings.Index(),strings.LastIndex() | 子串出现的位置 |
+| strings.Join(a[]string, sep string) |    join操作    |
+
+### byte和rune类型
+
+组成每个字符串的元素叫做“字符”，可以通过遍历或者单个获取字符串元素获得字符。 字符用单引号（’）包裹起来，如： 
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+	c1 := '中'
+	c2 := 'z'
+	fmt.Printf("%T \t %v \t %x \n", c1, c1, c1)
+	fmt.Printf("%T \t %v \t %x \n", c2, c2, c2)
+}
+
+// output:
+int32    20013   4e2d 
+int32    122     7a
+```
+
+Go 语言的字符有以下两种：
+
+1. `uint8`类型，或者叫 byte 型，代表了`ASCII码`的一个字符。
+2. `rune`类型，代表一个 `UTF-8字符`。
+
+当需要处理中文、日文或者其他复合字符时，则需要用到`rune`类型。`rune`类型实际是一个`int32`。 
+
+Go 使用了特殊的 `rune` 类型来处理 Unicode，让基于 Unicode 的文本处理更为方便，也可以使用 byte 型进行默认字符串处理，性能和扩展性都有照顾。 
+
+```go
+func traversalString() {
+	str := "你好，我是golang"
+
+	// byte --> uint8
+	fmt.Printf("%T \t %v \n", str[0], str[0])
+	for i := 0; i < len(str); i++ {
+		fmt.Printf("%v(%c) ", str[i], str[i])
+	}
+	fmt.Println()
+	s := []rune(str)[0]
+	// rune --> int32
+	fmt.Printf("%T \t %v \n", s, s)
+	for _, char := range str {
+		fmt.Printf("%v(%c) ", char, char)
+	}
+}
+// output
+uint8    228
+228(ä) 189(½) 160( ) 229(å) 165(¥) 189(½) 239(ï) 188(¼) 140() 230(æ) 136() 145() 230(æ) 152() 103(g) 111(o) 108(l) 97(a) 110
+(n) 103(g)
+int32    20320
+20320(你) 22909(好) 65292(，) 25105(我) 26159(是) 103(g) 111(o) 108(l) 97(a) 110(n) 103(g)
+```
+
+因为UTF8编码下一个中文汉字由3~4个字节组成，所以我们不能简单的按照字节去遍历一个包含中文的字符串，否则就会出现上面输出中第一行的结果。
+
+字符串底层是一个byte数组，所以可以和`[]byte`类型相互转换。字符串是不能修改的 字符串是由byte字节组成，所以字符串的长度是byte字节的长度。 rune类型用来表示utf8字符，一个rune字符由一个或多个byte组成。
